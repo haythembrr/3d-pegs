@@ -19216,15 +19216,18 @@ class u_ {
     if (this.selectedType === "panel")
       this.multiPanelManager.updatePanelPosition(this.selectedId, e), this.centerCameraOnPanels();
     else if (this.selectedType === "accessory") {
-      if (this.checkAccessoryCollision(e, this.selectedObject, this.selectedId)) {
-        console.log("[finishDrag] Collision detected, canceling drag"), this.cancelDrag();
+      let n = !1, i = e.clone();
+      const s = this.multiPanelManager.getClosestHole(e);
+      if (s && (this.checkAccessoryCollision(s, this.selectedObject, this.selectedId) || (n = !0, i = s)), !n) {
+        console.log("[finishDrag] Invalid placement (not on panel or collision), canceling drag"), this.cancelDrag();
         return;
       }
-      const i = this.placedAccessories.get(this.selectedId);
-      if (i) {
-        i.panelId && this.multiPanelManager.detachAccessoryFromPanel(i.panelId, this.selectedId);
-        const s = this.multiPanelManager.getPanelAtPosition(e);
-        s ? (i.panelId = s.id, this.multiPanelManager.attachAccessoryToPanel(s.id, this.selectedId)) : i.panelId = null, i.boundingBox = new vt().setFromObject(i.object);
+      this.selectedObject.position.copy(i);
+      const a = this.placedAccessories.get(this.selectedId);
+      if (a) {
+        a.panelId && this.multiPanelManager.detachAccessoryFromPanel(a.panelId, this.selectedId);
+        const o = this.multiPanelManager.getPanelAtPosition(i);
+        o && (a.panelId = o.id, this.multiPanelManager.attachAccessoryToPanel(o.id, this.selectedId)), a.boundingBox = new vt().setFromObject(a.object);
       }
     }
     this.isDragging = !1, this.dragStartPosition = null, this.dragOriginalPosition = null;

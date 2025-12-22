@@ -848,15 +848,35 @@ export class UIController {
             // Re-center camera after moving panel
             this.centerCameraOnPanels();
         } else if (this.selectedType === 'accessory') {
-            // Check for collision before confirming the drop
-            const hasCollision = this.checkAccessoryCollision(newPosition, this.selectedObject, this.selectedId);
+            // For accessories, we need to validate:
+            // 1. Must be on a valid panel
+            // 2. Must snap to a valid hole
+            // 3. Must not collide with other accessories
             
-            if (hasCollision) {
-                // Collision detected - cancel the drag and restore original position
-                console.log('[finishDrag] Collision detected, canceling drag');
+            let isValidPlacement = false;
+            let finalPosition = newPosition.clone();
+            
+            // Check if position is on a panel and can snap to a hole
+            const snapPos = this.multiPanelManager.getClosestHole(newPosition);
+            if (snapPos) {
+                // Check for collision with other accessories (exclude the one being dragged)
+                const hasCollision = this.checkAccessoryCollision(snapPos, this.selectedObject, this.selectedId);
+                
+                if (!hasCollision) {
+                    isValidPlacement = true;
+                    finalPosition = snapPos;
+                }
+            }
+            
+            if (!isValidPlacement) {
+                // Invalid placement - cancel the drag and restore original position
+                console.log('[finishDrag] Invalid placement (not on panel or collision), canceling drag');
                 this.cancelDrag();
                 return;
             }
+            
+            // Valid placement - update position and panel attachment
+            this.selectedObject.position.copy(finalPosition);
             
             // Update accessory's panel attachment
             const accessory = this.placedAccessories.get(this.selectedId);
@@ -866,12 +886,10 @@ export class UIController {
                     this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, this.selectedId);
                 }
                 // Attach to new panel
-                const newPanel = this.multiPanelManager.getPanelAtPosition(newPosition);
+                const newPanel = this.multiPanelManager.getPanelAtPosition(finalPosition);
                 if (newPanel) {
                     accessory.panelId = newPanel.id;
                     this.multiPanelManager.attachAccessoryToPanel(newPanel.id, this.selectedId);
-                } else {
-                    accessory.panelId = null;
                 }
                 
                 // Update bounding box
