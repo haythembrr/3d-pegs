@@ -842,8 +842,18 @@ export class UIController {
         const newPosition = this.selectedObject.position.clone();
 
         if (this.selectedType === 'panel') {
+            // Get the panel being moved and its attached accessories
+            const movedPanel = this.multiPanelManager.getPanel(this.selectedId);
+            const attachedAccessoryIds = movedPanel ? [...movedPanel.attachedAccessories] : [];
+            
             // Update panel position in manager
             this.multiPanelManager.updatePanelPosition(this.selectedId, newPosition);
+            
+            // Relocate attached accessories to valid positions
+            if (attachedAccessoryIds.length > 0) {
+                console.log(`[finishDrag] Panel moved, relocating ${attachedAccessoryIds.length} accessories`);
+                this.relocateAccessoriesAfterPanelMove(attachedAccessoryIds, this.selectedId);
+            }
             
             // Re-center camera after moving panel
             this.centerCameraOnPanels();
@@ -909,6 +919,134 @@ export class UIController {
 
         // Reset highlight to selection color
         this.sceneManager.highlightObject(this.selectedObject, true);
+    }
+
+    /**
+     * Relocate accessories to valid positions after their parent panel was moved
+     * Each accessory finds the closest valid hole on any available panel
+     */
+    private relocateAccessoriesAfterPanelMove(accessoryIds: string[], _movedPanelId: string): void {
+        for (const accId of accessoryIds) {
+            const accessory = this.placedAccessories.get(accId);
+            if (!accessory) continue;
+
+            const currentPos = accessory.object.position.clone();
+            
+            // Try to find a valid position on any panel (including the moved panel's new position)
+            let bestPosition: THREE.Vector3 | null = null;
+            let bestDistance = Infinity;
+            
+            // Get all panels
+            const allPanels = this.multiPanelManager.getAllPanels();
+            
+            for (const panel of allPanels) {
+                // Get all hole positions for this panel
+                const holePositions = this.getHolePositionsForPanel(panel);
+                
+                for (const holePos of holePositions) {
+                    // Check if this position is valid (no collision with other accessories)
+                    const hasCollision = this.checkAccessoryCollision(holePos, accessory.object, accId);
+                    
+                    if (!hasCollision) {
+                        const distance = currentPos.distanceTo(holePos);
+                        if (distance < bestDistance) {
+                            bestDistance = distance;
+                            bestPosition = holePos.clone();
+                        }
+                    }
+                }
+            }
+            
+            if (bestPosition) {
+                // Move accessory to the best valid position
+                accessory.object.position.copy(bestPosition);
+                
+                // Update panel attachment
+                if (accessory.panelId) {
+                    this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, accId);
+                }
+                
+                const newPanel = this.multiPanelManager.getPanelAtPosition(bestPosition);
+                if (newPanel) {
+                    accessory.panelId = newPanel.id;
+                    this.multiPanelManager.attachAccessoryToPanel(newPanel.id, accId);
+                }
+                
+                // Update bounding box
+                accessory.boundingBox = new THREE.Box3().setFromObject(accessory.object);
+                
+                console.log(`[relocateAccessories] Moved ${accId} to (${bestPosition.x.toFixed(3)}, ${bestPosition.y.toFixed(3)})`);
+            } else {
+                // No valid position found - remove the accessory
+                console.log(`[relocateAccessories] No valid position for ${accId}, removing it`);
+                this.removeAccessory(accId);
+            }
+        }
+        
+        // Update the price display to reflect any removed accessories
+        this.updatePriceDisplay();
+    }
+
+    /**
+     * Get all hole positions for a specific panel
+     */
+    private getHolePositionsForPanel(panel: { id: string; position: THREE.Vector3; metadata: any }): THREE.Vector3[] {
+        const positions: THREE.Vector3[] = [];
+        
+        const widthM = (panel.metadata.panel_width_cm * 10) / 1000;
+        const heightM = (panel.metadata.panel_height_cm * 10) / 1000;
+        const spacing = panel.metadata.grid_spacing_mm / 1000;
+        const offset = panel.metadata.grid_offset_mm / 1000;
+        const margin = panel.metadata.border_margin_mm / 1000;
+        
+        // Grid A positions
+        for (let gx = margin; gx <= widthM - margin; gx += spacing) {
+            for (let gy = margin; gy <= heightM - margin; gy += spacing) {
+                positions.push(new THREE.Vector3(
+                    panel.position.x + gx,
+                    panel.position.y - gy,
+                    0.005 // Slightly above panel surface
+                ));
+            }
+        }
+        
+        // Grid B positions (offset/staggered)
+        for (let gx = margin + offset; gx <= widthM - margin; gx += spacing) {
+            for (let gy = margin + offset; gy <= heightM - margin; gy += spacing) {
+                positions.push(new THREE.Vector3(
+                    panel.position.x + gx,
+                    panel.position.y - gy,
+                    0.005
+                ));
+            }
+        }
+        
+        return positions;
+    }
+
+    /**
+     * Remove an accessory by ID (helper for when no valid position is found)
+     */
+    private removeAccessory(accessoryId: string): void {
+        const accessory = this.placedAccessories.get(accessoryId);
+        if (!accessory) return;
+        
+        // Remove from scene
+        this.sceneManager.removeObject(accessory.object);
+        
+        // Detach from panel
+        if (accessory.panelId) {
+            this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, accessoryId);
+        }
+        
+        // Remove from price calculator
+        this.priceCalculator.removeItem(accessory.productId);
+        
+        // Remove from placed accessories
+        this.placedAccessories.delete(accessoryId);
+        
+        // Update price display
+        this.updatePriceDisplay();
     }
 
     /**
