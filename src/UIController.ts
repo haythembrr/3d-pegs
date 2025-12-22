@@ -411,21 +411,28 @@ export class UIController {
             if (panels.length === 0) {
                 this.ghostPanel.visible = false;
                 this.isValidPlacement = false;
+                console.log('[handleMouseMove] Accessory - no panels exist, hiding ghost');
                 return;
             }
 
             const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
 
             if (intersection) {
+                console.log(`[handleMouseMove] Accessory - intersection point: (${intersection.point.x.toFixed(4)}m, ${intersection.point.y.toFixed(4)}m, ${intersection.point.z.toFixed(4)}m)`);
+                
                 const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
                 if (snapPos) {
                     this.ghostPanel.position.copy(snapPos);
                     this.isValidPlacement = true;
+                    this.sceneManager.setGhostValid(this.ghostPanel, true);
+                    console.log(`[handleMouseMove] Accessory - ✓ snapped to: (${snapPos.x.toFixed(4)}m, ${snapPos.y.toFixed(4)}m), isValidPlacement: true`);
                 } else {
                     this.ghostPanel.position.copy(intersection.point);
+                    this.ghostPanel.position.z = 0.015; // Keep in front
                     this.isValidPlacement = false;
+                    this.sceneManager.setGhostValid(this.ghostPanel, false);
+                    console.log(`[handleMouseMove] Accessory - ✗ no snap found, isValidPlacement: false`);
                 }
-                this.sceneManager.setGhostValid(this.ghostPanel, this.isValidPlacement);
             } else {
                 // Mouse not over a panel - show ghost at plane intersection but mark invalid
                 const planeIntersection = this.sceneManager.getIntersectionWithPlane(event);
@@ -433,8 +440,10 @@ export class UIController {
                     this.ghostPanel.position.copy(planeIntersection);
                     this.isValidPlacement = false;
                     this.sceneManager.setGhostValid(this.ghostPanel, false);
+                    console.log(`[handleMouseMove] Accessory - not over panel, isValidPlacement: false`);
                 } else {
                     this.ghostPanel.visible = false;
+                    this.isValidPlacement = false;
                 }
             }
         }
@@ -448,9 +457,42 @@ export class UIController {
         if (this.isDragging) return;
 
         if (this.isPlacingPanel) {
+            // Re-validate placement at click time to ensure consistency
+            let clickIsValid = this.isValidPlacement;
+            
+            if (this.placementType === 'accessory' && this.ghostPanel) {
+                // Double-check: verify the ghost position is actually on a valid snap point
+                const panels = this.multiPanelManager.getAllPanels().map(p => p.object);
+                const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
+                
+                if (intersection) {
+                    const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
+                    clickIsValid = snapPos !== null;
+                    
+                    // Update ghost position and visual to match click-time validation
+                    if (snapPos) {
+                        this.ghostPanel.position.copy(snapPos);
+                        this.sceneManager.setGhostValid(this.ghostPanel, true);
+                    } else {
+                        this.sceneManager.setGhostValid(this.ghostPanel, false);
+                    }
+                } else {
+                    clickIsValid = false;
+                }
+            }
+            
             // Only place if ghost is visible AND placement is valid
-            if (this.ghostPanel && this.ghostPanel.visible && this.isValidPlacement) {
+            console.log(`[handleClick] Placement attempt - ghostVisible: ${this.ghostPanel?.visible}, isValidPlacement: ${this.isValidPlacement}, clickIsValid: ${clickIsValid}, placementType: ${this.placementType}`);
+            
+            if (this.ghostPanel && this.ghostPanel.visible && clickIsValid) {
+                console.log('[handleClick] ✓ Placing object - valid placement');
                 this.confirmPlacement();
+            } else {
+                console.log(`[handleClick] ✗ Cannot place - visible: ${this.ghostPanel?.visible}, valid: ${clickIsValid}`);
+                // Visual feedback - flash red briefly
+                if (this.ghostPanel) {
+                    this.sceneManager.setGhostValid(this.ghostPanel, false);
+                }
             }
         } else {
             // Not placing. Check if clicked on existing object to select it
@@ -647,6 +689,9 @@ export class UIController {
         if (this.selectedType === 'panel') {
             // Update panel position in manager
             this.multiPanelManager.updatePanelPosition(this.selectedId, newPosition);
+            
+            // Re-center camera after moving panel
+            this.centerCameraOnPanels();
         } else if (this.selectedType === 'accessory') {
             // Update accessory's panel attachment
             const accessory = this.placedAccessories.get(this.selectedId);
@@ -1035,6 +1080,9 @@ export class UIController {
         }
 
         this.updatePriceDisplay();
+        
+        // Re-center camera on remaining panels
+        this.centerCameraOnPanels();
     }
 
     /**
@@ -1064,6 +1112,16 @@ export class UIController {
         this.placedAccessories.delete(accessoryId);
 
         this.updatePriceDisplay();
+    }
+
+    /**
+     * Center camera on all panels
+     */
+    private centerCameraOnPanels(): void {
+        const allPanels = this.multiPanelManager.getAllPanels().map(p => p.object);
+        if (allPanels.length > 0) {
+            this.sceneManager.fitCameraToSelection(allPanels);
+        }
     }
 
     /**
