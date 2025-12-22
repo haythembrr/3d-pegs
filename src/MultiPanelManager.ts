@@ -497,10 +497,13 @@ export class MultiPanelManager {
                         // Convert back to world coordinates
                         // World X = panel.x + localX
                         // World Y = panel.y - localY (invert back)
+                        // For rotated panels (-90° around X), the surface is at the panel's position
+                        // We need to calculate the actual surface position considering panel thickness
+                        const surfaceZ = this.calculatePanelSurfaceZ(panel);
                         closest = new THREE.Vector3(
                             panel.position.x + gx,
                             panel.position.y - gy,
-                            0.015 // 1.5cm in front of panel
+                            surfaceZ + 0.003 // 3mm above surface (reduced from 15mm)
                         );
                         closestPanel = panel;
                     }
@@ -516,10 +519,11 @@ export class MultiPanelManager {
 
                     if (distSq < minDistSq) {
                         minDistSq = distSq;
+                        const surfaceZ = this.calculatePanelSurfaceZ(panel);
                         closest = new THREE.Vector3(
                             panel.position.x + gx,
                             panel.position.y - gy,
-                            0.015
+                            surfaceZ + 0.003 // 3mm above surface
                         );
                         closestPanel = panel;
                     }
@@ -535,5 +539,26 @@ export class MultiPanelManager {
         }
 
         return closest;
+    }
+
+    /**
+     * Calculate the actual surface Z position of a panel considering its rotation and thickness
+     */
+    private calculatePanelSurfaceZ(panel: Panel): number {
+        // Panels are rotated -90° around X-axis, so they lie flat
+        // The panel thickness (typically 5mm for MDF) affects the surface position
+        // For a panel rotated -90°, the surface is slightly above the panel's origin
+        
+        // Get the panel's bounding box to determine thickness
+        const box = new THREE.Box3().setFromObject(panel.object);
+        const size = box.getSize(new THREE.Vector3());
+        
+        // After -90° rotation around X:
+        // - Original Y becomes Z
+        // - The panel's "thickness" is now in the Z direction
+        // - We want accessories to sit on the top surface
+        
+        // The panel's top surface is at its position.z + half the thickness in Z direction
+        return panel.position.z + (size.z / 2);
     }
 }
