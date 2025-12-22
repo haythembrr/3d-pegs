@@ -59,7 +59,7 @@ export class UIController {
         this.sceneManager = new SceneManager(container);
         this.modelLoader = new ModelLoader();
         this.priceCalculator = new PriceCalculator();
-        this.cartIntegration = new CartIntegration(config.cartApiUrl);
+        this.cartIntegration = new CartIntegration(config.cartApiUrl, config.storeApiNonce, config.cartPageUrl);
         this.multiPanelManager = new MultiPanelManager();
 
         // Set product data

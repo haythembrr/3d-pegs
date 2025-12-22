@@ -121,11 +121,22 @@ class Shortcode_Handler {
 			// Re-fetch default products data for localization
 			$data = $this->get_products_data();
 			
+			// Get WooCommerce Store API nonce
+			$store_api_nonce = '';
+			if ( function_exists( 'wp_create_nonce' ) ) {
+				$store_api_nonce = wp_create_nonce( 'wc_store_api' );
+			}
+			
+			// Get WooCommerce cart page URL
+			$cart_url = function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '/cart';
+			
 			wp_localize_script( 'pegboard-3d-main', 'Pegboard3DConfig', array(
 				'defaultPanel' => '', 
 				'theme' => 'light',
 				'apiUrl' => rest_url( 'pegboard-3d/v1' ),
 				'cartApiUrl' => rest_url( 'wc/store/v1/cart/add-item' ),
+				'cartPageUrl' => $cart_url,
+				'storeApiNonce' => $store_api_nonce,
 				'products' => $data
 			) );
 

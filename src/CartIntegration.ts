@@ -15,9 +15,45 @@ export interface CartResponse {
 export class CartIntegration {
     private apiUrl: string;
     private isLoading: boolean = false;
+    private nonce: string;
+    private cartPageUrl: string;
 
-    constructor(apiUrl: string = '/wp-json/wc/store/v1/cart/add-item') {
+    constructor(apiUrl: string = '/wp-json/wc/store/v1/cart/add-item', nonce: string = '', cartPageUrl: string = '/cart') {
         this.apiUrl = apiUrl;
+        this.cartPageUrl = cartPageUrl;
+        // Get nonce from WooCommerce Store API or fallback
+        this.nonce = nonce || this.getStoreApiNonce();
+    }
+
+    /**
+     * Get the WooCommerce Store API nonce from various sources
+     */
+    private getStoreApiNonce(): string {
+        // Try wcSettings (WooCommerce Blocks)
+        if (typeof (window as any).wcSettings !== 'undefined') {
+            const wcSettings = (window as any).wcSettings;
+            if (wcSettings.storeApiNonce) {
+                return wcSettings.storeApiNonce;
+            }
+            if (wcSettings.nonce) {
+                return wcSettings.nonce;
+            }
+        }
+        
+        // Try wcStoreApiNonce (older WooCommerce versions)
+        if (typeof (window as any).wcStoreApiNonce !== 'undefined') {
+            return (window as any).wcStoreApiNonce;
+        }
+        
+        // Try wp.apiFetch nonce
+        if (typeof (window as any).wp !== 'undefined' && (window as any).wp.apiFetch) {
+            const apiFetch = (window as any).wp.apiFetch;
+            if (apiFetch.nonceMiddleware && apiFetch.nonceMiddleware.nonce) {
+                return apiFetch.nonceMiddleware.nonce;
+            }
+        }
+        
+        return '';
     }
 
     /**
@@ -51,28 +87,37 @@ export class CartIntegration {
      * Add a single item to cart
      */
     private async addSingleItem(item: SceneItem): Promise<void> {
-        const body: any = {
+        const body: Record<string, unknown> = {
             id: item.productId,
             quantity: item.quantity
         };
 
+        // For variable products, use variation_id directly
         if (item.variationId) {
-            body.variation = [{
-                attribute: '',
-                value: item.variationId
-            }];
+            body.variation_id = item.variationId;
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        // Add nonce header if available (required for Store API)
+        if (this.nonce) {
+            headers['Nonce'] = this.nonce;
+            headers['X-WC-Store-API-Nonce'] = this.nonce;
         }
 
         const response = await fetch(this.apiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers,
+            credentials: 'same-origin', // Include cookies for session
             body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
+            throw new Error(errorMessage);
         }
     }
 
@@ -122,13 +167,18 @@ export class CartIntegration {
             document.body.dispatchEvent(new Event('wc_fragment_refresh'));
         }
 
-        // Show success message
-        this.showMessage('Configuration ajoutée au panier !', 'success');
+        // Show success message briefly then redirect
+        this.showMessage('Configuration ajoutée au panier ! Redirection...', 'success');
+
+        // Redirect to cart page after a short delay
+        setTimeout(() => {
+            window.location.href = this.cartPageUrl;
+        }, 500);
 
         return {
             success: true,
             message: 'Articles ajoutés au panier avec succès',
-            cartUrl: '/panier' // Can be configured
+            cartUrl: this.cartPageUrl
         };
     }
 
