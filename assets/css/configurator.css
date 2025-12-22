@@ -1,0 +1,319 @@
+/* Pegboard 3D Configurator Styles */
+
+#pegboard-configurator-wrapper {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    background: #f5f5f5;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#pegboard-3d-container {
+    flex: 1;
+    background: #e0e0e0;
+    position: relative;
+    min-height: 400px;
+}
+
+/* Ensure canvas fills container and receives events */
+#pegboard-3d-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: crosshair;
+}
+
+/* Placement mode cursor */
+#pegboard-3d-container.placing canvas {
+    cursor: copy;
+}
+
+/* Dragging mode cursor */
+#pegboard-3d-container.dragging canvas {
+    cursor: grabbing !important;
+}
+
+.pegboard-sidebar {
+    width: 300px;
+    background: white;
+    padding: 20px;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.pegboard-sidebar h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+}
+
+.pegboard-price {
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.pegboard-items {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.pegboard-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #fafafa;
+    border-radius: 4px;
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.pegboard-item:hover {
+    background: #f0f0f0;
+    border-color: #ddd;
+}
+
+#pegboard-item-list .pegboard-item.selected {
+    border-color: #0073aa;
+    background: #e5f5fa;
+    box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+}
+
+/* Accessory items have slightly different styling */
+.pegboard-item[data-accessory-id] {
+    background: #f5f9f5;
+}
+
+.pegboard-item[data-accessory-id]:hover {
+    background: #e8f5e9;
+}
+
+#pegboard-item-list .pegboard-item[data-accessory-id].selected {
+    border-color: #2e7d32;
+    background: #e8f5e9;
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+}
+
+.pegboard-item-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.pegboard-item-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.pegboard-item-actions .select-btn:hover {
+    background: #e5f5fa;
+    color: #0073aa;
+}
+
+.pegboard-item-actions .delete-btn:hover {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.pegboard-messages {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
+.pegboard-message {
+    padding: 15px 20px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    animation: slideIn 0.3s ease;
+}
+
+.pegboard-message-success {
+    background: #4caf50;
+    color: white;
+}
+
+.pegboard-message-error {
+    background: #f44336;
+    color: white;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin: 10px auto;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+#pegboard-add-to-cart {
+    width: 100%;
+    padding: 12px;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+#pegboard-add-to-cart:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Product Library */
+.pegboard-library {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.pegboard-section-title {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #666;
+    margin: 10px 0 5px 0;
+    text-transform: uppercase;
+}
+
+.pegboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.pegboard-product-btn {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pegboard-product-btn:hover {
+    border-color: #3498db;
+    background: #f0f8ff;
+}
+
+.pegboard-product-btn .product-name {
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+
+.pegboard-camera-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.small-btn {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    background: #e0e0e0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.small-btn:hover {
+    background: #d0d0d0;
+}
+
+.small-btn.danger {
+    background: #ffebee;
+    border-color: #ffcdd2;
+    color: #c62828;
+}
+
+.small-btn.danger:hover {
+    background: #ffcdd2;
+}
+
+/* Item info layout */
+.item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.item-name {
+    font-weight: 500;
+}
+
+.item-price {
+    font-size: 0.85em;
+    color: #666;
+}
+
+.summary-item {
+    background: #f0f0f0;
+    font-size: 0.85em;
+    padding: 8px;
+}
+
+.summary-item span {
+    flex: 1;
+}
+
+
+/* Help hint */
+.pegboard-help-hint {
+    font-size: 0.8em;
+    color: #666;
+    background: #f5f5f5;
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border-left: 3px solid #3498db;
+}
