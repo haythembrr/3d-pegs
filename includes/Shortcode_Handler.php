@@ -36,42 +36,55 @@ class Shortcode_Handler {
 			'height' => '600px'
 		), $atts, 'pegboard_configurator' );
 
-		// Mark that we need to enqueue scripts
-		// add_filter( 'pegboard_3d_enqueue_scripts', '__return_true' );
-		// The enqueue logic is now handled in maybe_enqueue_scripts by parsing post content
-		
-		// Note: We moved wp_localize_script to maybe_enqueue_scripts to ensure it runs.
-		// If you need unique config per shortcode, consider using data attributes on the container.
-
 		// Render container
 		ob_start();
 		?>
 		<div id="pegboard-configurator-wrapper" 
 			 style="height: <?php echo esc_attr( $atts['height'] ); ?>;"
 			 data-theme="<?php echo esc_attr( $atts['theme'] ); ?>"
-			 data-default-panel="<?php echo esc_attr( $atts['default_panel'] ); ?>"
-			 >
-			<div id="pegboard-3d-container" class="pegboard-3d-container"></div>
+			 data-default-panel="<?php echo esc_attr( $atts['default_panel'] ); ?>">
 			
+			<!-- 3D Scene Area -->
+			<div class="pegboard-scene-wrapper">
+				<!-- Camera controls overlay -->
+				<div class="pegboard-scene-controls">
+					<div class="pegboard-camera-controls" id="pegboard-camera-controls">
+						<button class="pegboard-camera-btn" data-preset="front" title="<?php esc_attr_e( 'Vue de face', '3d-pegs' ); ?>">Face</button>
+						<button class="pegboard-camera-btn" data-preset="side" title="<?php esc_attr_e( 'Vue de côté', '3d-pegs' ); ?>">Côté</button>
+						<button class="pegboard-camera-btn" data-preset="top" title="<?php esc_attr_e( 'Vue de haut', '3d-pegs' ); ?>">Haut</button>
+					</div>
+					<button class="pegboard-reset-btn" id="pegboard-reset" title="<?php esc_attr_e( 'Réinitialiser', '3d-pegs' ); ?>">
+						↺ Reset
+					</button>
+				</div>
+				
+				<!-- 3D Canvas -->
+				<div id="pegboard-3d-container" class="pegboard-3d-container"></div>
+			</div>
+			
+			<!-- Sidebar -->
 			<div id="pegboard-sidebar" class="pegboard-sidebar">
-				<h3><?php _e( 'Configuration', '3d-pegs' ); ?></h3>
+				<div class="pegboard-sidebar-header">
+					<h3><?php _e( 'Configuration', '3d-pegs' ); ?></h3>
+				</div>
 
 				<div id="pegboard-product-library" class="pegboard-library">
 					<!-- Populated by JS -->
 				</div>
 				
 				<div id="pegboard-price-display" class="pegboard-price">
-					<span class="label"><?php _e( 'Total:', '3d-pegs' ); ?></span>
-					<span class="amount">0 €</span>
+					<span class="label"><?php _e( 'Total', '3d-pegs' ); ?></span>
+					<span class="amount">0.00 €</span>
 				</div>
 
 				<div id="pegboard-item-list" class="pegboard-items"></div>
 
-				<button id="pegboard-add-to-cart" class="button button-primary">
-					<?php _e( 'Ajouter au panier', '3d-pegs' ); ?>
-				</button>
-
-				<div id="pegboard-cart-spinner" class="spinner hidden"></div>
+				<div class="pegboard-cart-section">
+					<button id="pegboard-add-to-cart" class="button button-primary">
+						<?php _e( 'Ajouter au panier', '3d-pegs' ); ?>
+					</button>
+					<div id="pegboard-cart-spinner" class="spinner hidden"></div>
+				</div>
 			</div>
 
 			<div id="pegboard-messages" class="pegboard-messages"></div>

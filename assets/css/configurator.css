@@ -1,158 +1,510 @@
-/* Pegboard 3D Configurator Styles */
+/* ============================================
+   Pegboard 3D Configurator
+   Modern, Responsive UI - Refactored Layout
+   ============================================ */
 
+/* CSS Variables */
+:root {
+    --pb-primary: #3b82f6;
+    --pb-primary-hover: #2563eb;
+    --pb-danger: #ef4444;
+    --pb-danger-light: #fef2f2;
+    --pb-success: #22c55e;
+    --pb-bg: #f8fafc;
+    --pb-surface: #ffffff;
+    --pb-border: #e2e8f0;
+    --pb-text: #0f172a;
+    --pb-text-secondary: #64748b;
+    --pb-radius: 12px;
+    --pb-radius-sm: 8px;
+    --pb-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --pb-shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+    --pb-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    
+    /* Layout ratios */
+    --pb-scene-ratio: 70%;
+    --pb-sidebar-ratio: 30%;
+    --pb-sidebar-max: 320px;
+    --pb-sidebar-min: 280px;
+}
+
+/* Reset for configurator */
+#pegboard-configurator-wrapper *,
+#pegboard-configurator-wrapper *::before,
+#pegboard-configurator-wrapper *::after {
+    box-sizing: border-box;
+}
+
+/* ============================================
+   Main Layout - Desktop: 70/30 split
+   ============================================ */
 #pegboard-configurator-wrapper {
     display: flex;
-    gap: 20px;
+    flex-direction: row;
     width: 100%;
-    background: #f5f5f5;
-    border-radius: 8px;
+    height: 600px; /* Default, can be overridden by inline style */
+    min-height: 500px;
+    background: var(--pb-bg);
+    border-radius: var(--pb-radius);
     overflow: hidden;
+    font-family: var(--pb-font);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pb-text);
+    box-shadow: var(--pb-shadow-md);
+}
+
+/* ============================================
+   3D Scene Area - Takes ~70% width
+   ============================================ */
+.pegboard-scene-wrapper {
+    flex: 1 1 var(--pb-scene-ratio);
+    min-width: 0; /* Prevent flex overflow */
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: linear-gradient(145deg, #e8eef5 0%, #d1dae6 100%);
 }
 
 #pegboard-3d-container {
     flex: 1;
-    background: #e0e0e0;
     position: relative;
-    min-height: 400px;
+    width: 100%;
+    height: 100%;
+    min-height: 0; /* Important for flex child */
 }
 
-/* Ensure canvas fills container and receives events */
 #pegboard-3d-container canvas {
     display: block;
     width: 100% !important;
     height: 100% !important;
-    cursor: crosshair;
+    cursor: grab;
 }
 
-/* Placement mode cursor */
 #pegboard-3d-container.placing canvas {
     cursor: copy;
 }
 
-/* Dragging mode cursor */
 #pegboard-3d-container.dragging canvas {
     cursor: grabbing !important;
 }
 
-.pegboard-sidebar {
-    width: 300px;
-    background: white;
-    padding: 20px;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+/* ============================================
+   Camera Controls - Floating overlay
+   ============================================ */
+.pegboard-scene-controls {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 100;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 8px;
+    pointer-events: none; /* Allow clicks to pass through to canvas */
 }
 
-.pegboard-sidebar h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.2em;
+.pegboard-scene-controls > * {
+    pointer-events: auto; /* Re-enable for actual controls */
 }
 
+.pegboard-camera-controls {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--pb-surface);
+    padding: 4px;
+    border-radius: var(--pb-radius-sm);
+    box-shadow: var(--pb-shadow-md);
+}
+
+.pegboard-camera-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--pb-font);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--pb-text);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.pegboard-camera-btn:hover {
+    background: var(--pb-bg);
+}
+
+.pegboard-camera-btn:active {
+    background: var(--pb-primary);
+    color: white;
+}
+
+.pegboard-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--pb-font);
+    background: var(--pb-surface);
+    border: none;
+    border-radius: var(--pb-radius-sm);
+    cursor: pointer;
+    color: var(--pb-danger);
+    box-shadow: var(--pb-shadow-md);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.pegboard-reset-btn:hover {
+    background: var(--pb-danger-light);
+}
+
+/* ============================================
+   Sidebar - Takes ~30% width (max 320px)
+   ============================================ */
+.pegboard-sidebar {
+    flex: 0 0 auto;
+    width: clamp(var(--pb-sidebar-min), var(--pb-sidebar-ratio), var(--pb-sidebar-max));
+    max-width: var(--pb-sidebar-max);
+    background: var(--pb-surface);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--pb-border);
+    overflow: hidden;
+}
+
+/* Sidebar Header */
+.pegboard-sidebar-header {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--pb-border);
+    background: var(--pb-surface);
+}
+
+.pegboard-sidebar-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--pb-text);
+    letter-spacing: -0.01em;
+}
+
+/* Product Library */
+.pegboard-library {
+    flex-shrink: 0;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--pb-border);
+    overflow-y: auto;
+    max-height: 200px;
+}
+
+.pegboard-section-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--pb-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 0;
+}
+
+.pegboard-section-title:not(:first-child) {
+    margin-top: 14px;
+}
+
+.pegboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.pegboard-product-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    background: var(--pb-bg);
+    border: 1px solid var(--pb-border);
+    border-radius: var(--pb-radius-sm);
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--pb-font);
+    transition: all 0.15s ease;
+}
+
+.pegboard-product-btn:hover {
+    border-color: var(--pb-primary);
+    background: #eff6ff;
+    transform: translateY(-1px);
+}
+
+.pegboard-product-btn:active {
+    transform: translateY(0);
+}
+
+.pegboard-product-btn .product-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pb-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pegboard-product-btn .product-price {
+    font-size: 12px;
+    color: var(--pb-text-secondary);
+}
+
+/* Price Display */
 .pegboard-price {
-    padding: 15px;
-    background: #f9f9f9;
-    border-radius: 4px;
+    flex-shrink: 0;
+    padding: 14px 20px;
+    background: linear-gradient(to right, var(--pb-bg), #f1f5f9);
+    border-bottom: 1px solid var(--pb-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 1.1em;
-    font-weight: bold;
 }
 
+.pegboard-price .label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pb-text-secondary);
+}
+
+.pegboard-price .amount {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--pb-text);
+    letter-spacing: -0.02em;
+}
+
+/* Item List */
 .pegboard-items {
-    flex: 1;
+    flex: 1 1 auto;
     overflow-y: auto;
-    max-height: 400px;
+    padding: 12px 14px;
+    min-height: 80px;
+}
+
+.pegboard-help-hint {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--pb-text-secondary);
+    background: #f0f9ff;
+    padding: 10px 12px;
+    border-radius: var(--pb-radius-sm);
+    margin-bottom: 12px;
+    border-left: 3px solid var(--pb-primary);
 }
 
 .pegboard-item {
-    padding: 10px;
-    margin-bottom: 8px;
-    background: #fafafa;
-    border-radius: 4px;
-    font-size: 0.9em;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border: 2px solid transparent;
-    transition: all 0.2s;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: var(--pb-bg);
+    border-radius: var(--pb-radius-sm);
+    border: 1px solid transparent;
     cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pegboard-item:last-child {
+    margin-bottom: 0;
 }
 
 .pegboard-item:hover {
-    background: #f0f0f0;
-    border-color: #ddd;
+    background: #e2e8f0;
+    border-color: var(--pb-border);
 }
 
-#pegboard-item-list .pegboard-item.selected {
-    border-color: #0073aa;
-    background: #e5f5fa;
-    box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+.pegboard-item.selected {
+    border-color: var(--pb-primary);
+    background: #dbeafe;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-/* Accessory items have slightly different styling */
 .pegboard-item[data-accessory-id] {
-    background: #f5f9f5;
+    background: #f0fdf4;
 }
 
 .pegboard-item[data-accessory-id]:hover {
-    background: #e8f5e9;
+    background: #dcfce7;
 }
 
-#pegboard-item-list .pegboard-item[data-accessory-id].selected {
-    border-color: #2e7d32;
-    background: #e8f5e9;
-    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+.pegboard-item[data-accessory-id].selected {
+    border-color: var(--pb-success);
+    background: #bbf7d0;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pb-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-price {
+    font-size: 12px;
+    color: var(--pb-text-secondary);
 }
 
 .pegboard-item-actions {
     display: flex;
-    gap: 5px;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: 8px;
 }
 
 .pegboard-item-actions button {
-    background: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
     border: none;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 16px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: all 0.2s;
+    color: var(--pb-text-secondary);
+    transition: all 0.15s ease;
 }
 
 .pegboard-item-actions .select-btn:hover {
-    background: #e5f5fa;
-    color: #0073aa;
+    background: #dbeafe;
+    color: var(--pb-primary);
 }
 
 .pegboard-item-actions .delete-btn:hover {
-    background: #ffebee;
-    color: #c62828;
+    background: #fee2e2;
+    color: var(--pb-danger);
 }
 
+/* Summary */
+.summary-item {
+    background: var(--pb-surface) !important;
+    border: 1px solid var(--pb-border) !important;
+    cursor: default !important;
+    font-size: 12px;
+}
+
+.summary-item:hover {
+    background: var(--pb-surface) !important;
+}
+
+.summary-item span {
+    flex: 1;
+}
+
+/* Cart Section */
+.pegboard-cart-section {
+    flex-shrink: 0;
+    padding: 14px 16px;
+    border-top: 1px solid var(--pb-border);
+    background: var(--pb-surface);
+}
+
+#pegboard-add-to-cart {
+    display: block;
+    width: 100%;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--pb-font);
+    background: var(--pb-primary);
+    color: white;
+    border: none;
+    border-radius: var(--pb-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+}
+
+#pegboard-add-to-cart:hover {
+    background: var(--pb-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+#pegboard-add-to-cart:active {
+    transform: translateY(0);
+}
+
+#pegboard-add-to-cart:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Spinner */
+.spinner {
+    display: block;
+    width: 24px;
+    height: 24px;
+    margin: 12px auto 0;
+    border: 3px solid var(--pb-border);
+    border-top-color: var(--pb-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ============================================
+   Messages / Notifications
+   ============================================ */
 .pegboard-messages {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 9999;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .pegboard-message {
-    padding: 15px 20px;
-    margin-bottom: 10px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 14px 20px;
+    border-radius: var(--pb-radius-sm);
+    box-shadow: var(--pb-shadow-md);
+    font-size: 14px;
+    font-weight: 500;
     animation: slideIn 0.3s ease;
 }
 
 .pegboard-message-success {
-    background: #4caf50;
+    background: var(--pb-success);
     color: white;
 }
 
 .pegboard-message-error {
-    background: #f44336;
+    background: var(--pb-danger);
     color: white;
 }
 
@@ -161,159 +513,187 @@
         transform: translateX(100%);
         opacity: 0;
     }
-
     to {
         transform: translateX(0);
         opacity: 1;
     }
 }
 
-.hidden {
-    display: none !important;
-}
-
-.spinner {
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #3498db;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
-    margin: 10px auto;
-}
-
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
+/* ============================================
+   Responsive - Tablet (768px - 1024px)
+   ============================================ */
+@media screen and (max-width: 1024px) and (min-width: 769px) {
+    :root {
+        --pb-sidebar-max: 280px;
+        --pb-sidebar-min: 260px;
     }
-
-    100% {
-        transform: rotate(360deg);
+    
+    .pegboard-library {
+        max-height: 180px;
+    }
+    
+    .pegboard-product-btn {
+        padding: 8px 10px;
+    }
+    
+    .pegboard-product-btn .product-name {
+        font-size: 12px;
     }
 }
 
-#pegboard-add-to-cart {
-    width: 100%;
-    padding: 12px;
-    font-size: 1em;
-    cursor: pointer;
+/* ============================================
+   Responsive - Mobile (≤ 768px)
+   ============================================ */
+@media screen and (max-width: 768px) {
+    #pegboard-configurator-wrapper {
+        flex-direction: column;
+        height: auto !important;
+        min-height: auto;
+        max-height: none;
+    }
+
+    /* Scene takes 50vh on mobile */
+    .pegboard-scene-wrapper {
+        flex: none;
+        height: 50vh;
+        min-height: 280px;
+        max-height: 400px;
+        width: 100%;
+    }
+
+    #pegboard-3d-container {
+        min-height: 100%;
+    }
+
+    /* Camera controls - horizontal layout on mobile */
+    .pegboard-scene-controls {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    /* Sidebar takes remaining space, scrollable */
+    .pegboard-sidebar {
+        flex: none;
+        width: 100%;
+        max-width: none;
+        border-left: none;
+        border-top: 1px solid var(--pb-border);
+        max-height: 50vh;
+        overflow-y: auto;
+    }
+
+    .pegboard-library {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .pegboard-items {
+        max-height: 150px;
+    }
+    
+    .pegboard-price .amount {
+        font-size: 18px;
+    }
 }
 
-#pegboard-add-to-cart:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+/* ============================================
+   Responsive - Small Mobile (≤ 480px)
+   ============================================ */
+@media screen and (max-width: 480px) {
+    .pegboard-scene-wrapper {
+        height: 45vh;
+        min-height: 260px;
+    }
+
+    .pegboard-scene-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .pegboard-camera-controls {
+        justify-content: center;
+    }
+
+    .pegboard-camera-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .pegboard-reset-btn {
+        justify-content: center;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .pegboard-sidebar-header {
+        padding: 12px 14px;
+    }
+
+    .pegboard-sidebar-header h3 {
+        font-size: 15px;
+    }
+
+    .pegboard-library {
+        padding: 12px;
+    }
+
+    .pegboard-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .pegboard-product-btn {
+        padding: 8px 10px;
+    }
+
+    .pegboard-product-btn .product-name {
+        font-size: 12px;
+    }
+
+    .pegboard-product-btn .product-price {
+        font-size: 11px;
+    }
+
+    .pegboard-price {
+        padding: 12px 14px;
+    }
+
+    .pegboard-price .amount {
+        font-size: 18px;
+    }
+
+    .pegboard-items {
+        padding: 10px 12px;
+    }
+
+    .pegboard-cart-section {
+        padding: 12px;
+    }
+
+    #pegboard-add-to-cart {
+        padding: 12px 16px;
+        font-size: 14px;
+    }
 }
 
-/* Product Library */
-.pegboard-library {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.pegboard-section-title {
-    font-size: 0.9em;
-    font-weight: bold;
-    color: #666;
-    margin: 10px 0 5px 0;
-    text-transform: uppercase;
-}
-
-.pegboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px;
-}
-
-.pegboard-product-btn {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 8px;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.2s;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.pegboard-product-btn:hover {
-    border-color: #3498db;
-    background: #f0f8ff;
-}
-
-.pegboard-product-btn .product-name {
-    font-weight: 500;
-    font-size: 0.9em;
-}
-
-
-.pegboard-camera-controls {
-    display: flex;
-    gap: 5px;
-}
-
-.small-btn {
-    padding: 5px 10px;
-    font-size: 0.8em;
-    background: #e0e0e0;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.small-btn:hover {
-    background: #d0d0d0;
-}
-
-.small-btn.danger {
-    background: #ffebee;
-    border-color: #ffcdd2;
-    color: #c62828;
-}
-
-.small-btn.danger:hover {
-    background: #ffcdd2;
-}
-
-/* Item info layout */
-.item-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-}
-
-.item-name {
-    font-weight: 500;
-}
-
-.item-price {
-    font-size: 0.85em;
-    color: #666;
-}
-
-.summary-item {
-    background: #f0f0f0;
-    font-size: 0.85em;
-    padding: 8px;
-}
-
-.summary-item span {
-    flex: 1;
-}
-
-
-/* Help hint */
-.pegboard-help-hint {
-    font-size: 0.8em;
-    color: #666;
-    background: #f5f5f5;
-    padding: 8px 10px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-    border-left: 3px solid #3498db;
+/* ============================================
+   Large Desktop (> 1400px)
+   ============================================ */
+@media screen and (min-width: 1400px) {
+    :root {
+        --pb-sidebar-max: 360px;
+    }
+    
+    .pegboard-sidebar-header h3 {
+        font-size: 18px;
+    }
+    
+    .pegboard-price .amount {
+        font-size: 24px;
+    }
 }

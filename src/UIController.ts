@@ -97,23 +97,13 @@ export class UIController {
 
         let html = '';
 
-        // Add Reset Button
-        html += `<div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-                    <div class="pegboard-camera-controls">
-                        <button class="small-btn" data-preset="front" title="Vue de Face">Front</button>
-                        <button class="small-btn" data-preset="side" title="Vue de Côté">Side</button>
-                        <button class="small-btn" data-preset="top" title="Vue de Haut">Top</button>
-                    </div>
-                    <button id="pegboard-reset" class="button small-btn danger">Reset</button>
-                 </div>`;
-
         if (boards.length > 0) {
             html += `<div class="pegboard-section-title">Panneaux</div>`;
             html += `<div class="pegboard-grid">`;
             html += boards.map(p => `
                 <button class="pegboard-product-btn" data-id="${p.id}" data-type="pegboard">
                     <span class="product-name">${p.name}</span>
-                    <span class="product-price">${p.price} €</span>
+                    <span class="product-price">${(p.price ?? 0).toFixed(2)} €</span>
                 </button>
             `).join('');
             html += `</div>`;
@@ -125,7 +115,7 @@ export class UIController {
             html += accessories.map(p => `
                 <button class="pegboard-product-btn" data-id="${p.id}" data-type="accessory">
                     <span class="product-name">${p.name}</span>
-                    <span class="product-price">${p.price} €</span>
+                    <span class="product-price">${(p.price ?? 0).toFixed(2)} €</span>
                 </button>
             `).join('');
             html += `</div>`;
@@ -134,8 +124,7 @@ export class UIController {
         libraryEl.innerHTML = html;
 
         // Add click listeners for products
-        const buttons = libraryEl.querySelectorAll('.pegboard-product-btn');
-        buttons.forEach(btn => {
+        libraryEl.querySelectorAll('.pegboard-product-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const target = e.currentTarget as HTMLElement;
                 const id = parseInt(target.dataset.id || '0');
@@ -146,19 +135,21 @@ export class UIController {
             });
         });
 
-        // Camera Preset Listeners
-        const presetBtns = libraryEl.querySelectorAll('.pegboard-camera-controls button');
-        presetBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const target = e.currentTarget as HTMLElement;
-                const preset = target.dataset.preset as 'front' | 'side' | 'top';
-                if (preset) {
-                    this.sceneManager.setCameraPreset(preset);
-                }
+        // Camera controls are now in the HTML template, bind them here
+        const cameraControls = document.getElementById('pegboard-camera-controls');
+        if (cameraControls) {
+            cameraControls.querySelectorAll('.pegboard-camera-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget as HTMLElement;
+                    const preset = target.dataset.preset as 'front' | 'side' | 'top';
+                    if (preset) {
+                        this.sceneManager.setCameraPreset(preset);
+                    }
+                });
             });
-        });
+        }
 
-        // Reset Listener
+        // Reset button
         const resetBtn = document.getElementById('pegboard-reset');
         if (resetBtn) {
             resetBtn.addEventListener('click', () => this.resetConfiguration());
