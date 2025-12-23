@@ -35,10 +35,8 @@ export class ModelLoader {
      * Load a GLB model from URL
      */
     public async loadModel(url: string): Promise<LoadedModel> {
-        // Check cache first
         const cached = this.cache.get(url);
         if (cached) {
-            console.log(`[ModelLoader] Loaded from cache: ${url}`);
             return cached;
         }
 
@@ -51,10 +49,7 @@ export class ModelLoader {
                     resolve(model);
                 },
                 undefined,
-                (error) => {
-                    console.error(`[ModelLoader] Failed to load ${url}:`, error);
-                    reject(error);
-                }
+                (error) => reject(error)
             );
         });
     }
@@ -65,8 +60,6 @@ export class ModelLoader {
     private processModel(gltf: any): LoadedModel {
         const scene = gltf.scene;
 
-        console.log('[ModelLoader] Processing model, userData:', scene.userData);
-
         // Auto-scale check: If model is huge (> 10m), it's likely in mm. Scale to m.
         const box = new THREE.Box3().setFromObject(scene);
         const size = new THREE.Vector3();
@@ -74,16 +67,11 @@ export class ModelLoader {
         const maxDim = Math.max(size.x, size.y, size.z);
 
         if (maxDim > 10) {
-            console.warn(`[ModelLoader] Model is huge (${maxDim} units). Assuming mm and scaling by 0.001.`);
             scene.scale.setScalar(0.001);
-            // Re-measure after scale if needed, but we trust the factor.
         }
 
-        // Try to determine model type from userData
         const userData = scene.userData || {};
-        let modelType = userData.model_type || this.inferModelType(scene);
-
-        console.log('[ModelLoader] Inferred model type:', modelType);
+        const modelType = userData.model_type || this.inferModelType(scene);
 
         let metadata: PegboardMetadata | AccessoryMetadata | null = null;
 
@@ -93,11 +81,7 @@ export class ModelLoader {
             metadata = this.extractAccessoryMetadata(scene);
         }
 
-        return {
-            scene,
-            metadata,
-            modelType
-        };
+        return { scene, metadata, modelType };
     }
 
     /**
@@ -105,8 +89,7 @@ export class ModelLoader {
      */
     private inferModelType(scene: THREE.Group): 'pegboard' | 'accessory' | 'unknown' {
         // Look for peg Empty objects - indicates accessory
-        const hasEmptyObjects = this.findPegEmptyObjects(scene).length > 0;
-        if (hasEmptyObjects) {
+        if (this.findPegEmptyObjects(scene).length > 0) {
             return 'accessory';
         }
 
@@ -115,9 +98,7 @@ export class ModelLoader {
             return 'pegboard';
         }
 
-        // Fallback: If no specific accessory markers found, assume it's a pegboard
-        // This is a permissive fallback to allow models without metadata to load
-        console.warn('[ModelLoader] Could not infer model type from metadata, defaulting to "pegboard"');
+        // Fallback: assume pegboard if no specific markers found
         return 'pegboard';
     }
 
@@ -127,7 +108,7 @@ export class ModelLoader {
     public extractPegboardMetadata(scene: THREE.Group): PegboardMetadata {
         const userData = scene.userData || {};
 
-        const metadata: PegboardMetadata = {
+        return {
             panel_width_cm: userData.panel_width_cm || 36,
             panel_height_cm: userData.panel_height_cm || 56,
             grid_spacing_mm: userData.grid_spacing_mm || SKADIS_DEFAULTS.grid_spacing_mm,
@@ -136,16 +117,6 @@ export class ModelLoader {
             slot_width_mm: userData.slot_width_mm || SKADIS_DEFAULTS.slot_width_mm,
             slot_height_mm: userData.slot_height_mm || SKADIS_DEFAULTS.slot_height_mm
         };
-
-        // Log warnings for missing metadata
-        if (!userData.panel_width_cm) {
-            console.warn('[ModelLoader] Missing panel_width_cm, using default');
-        }
-        if (!userData.panel_height_cm) {
-            console.warn('[ModelLoader] Missing panel_height_cm, using default');
-        }
-
-        return metadata;
     }
 
     /**
@@ -153,24 +124,16 @@ export class ModelLoader {
      */
     public extractAccessoryMetadata(scene: THREE.Group): AccessoryMetadata {
         const userData = scene.userData || {};
-
-        // Find all peg Empty objects
         const pegEmptyObjects = this.findPegEmptyObjects(scene);
         const pegPositions = pegEmptyObjects.map(obj => obj.position.clone());
 
-        const metadata: AccessoryMetadata = {
+        return {
             peg_positions: pegPositions,
             peg_count: pegPositions.length || userData.peg_count || 1,
             snap_mode: userData.snap_mode || 'single_slot',
             orientation: userData.orientation || 'front',
             load_capacity_g: userData.load_capacity_g || 500
         };
-
-        if (pegPositions.length === 0) {
-            console.warn('[ModelLoader] No peg Empty objects found in accessory model');
-        }
-
-        return metadata;
     }
 
     /**

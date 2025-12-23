@@ -220,64 +220,41 @@ export class MultiPanelManager {
         const gridPositions: GridPosition[] = [];
 
         panelArray.forEach(panel => {
-            const spacing = panel.metadata.grid_spacing_mm; // 40mm for SKÅDIS
-            const offset = panel.metadata.grid_offset_mm;   // 20mm for SKÅDIS
-            const margin = panel.metadata.border_margin_mm; // Border margin
-            const widthMm = panel.metadata.panel_width_cm * 10;  // Convert cm to mm
-            const heightMm = panel.metadata.panel_height_cm * 10; // Convert cm to mm
-            
-            // Panel position in world coordinates (meters)
-            // Panel origin is at TOP-LEFT corner
-            const panelXMm = panel.position.x * 1000; // Convert to mm
-            const panelYMm = panel.position.y * 1000; // Convert to mm (top edge)
+            const spacing = panel.metadata.grid_spacing_mm;
+            const offset = panel.metadata.grid_offset_mm;
+            const margin = panel.metadata.border_margin_mm;
+            const widthMm = panel.metadata.panel_width_cm * 10;
+            const heightMm = panel.metadata.panel_height_cm * 10;
+            const panelXMm = panel.position.x * 1000;
+            const panelYMm = panel.position.y * 1000;
 
-            console.log(`[calculateGlobalGrid] Panel ${panel.id}: origin=(${panelXMm}mm, ${panelYMm}mm), size=${widthMm}x${heightMm}mm, margin=${margin}mm, spacing=${spacing}mm`);
-
-            // Grid positions are measured from TOP-LEFT corner
-            // localX: 0 at left, increases to right
-            // localY: 0 at top, increases downward
-            // World Y = panelY - localY (since panel extends downward)
-            
-            // Grid A positions - primary grid starting from margin
+            // Grid A positions
             for (let localX = margin; localX <= widthMm - margin; localX += spacing) {
                 for (let localY = margin; localY <= heightMm - margin; localY += spacing) {
-                    const worldX = panelXMm + localX;
-                    const worldY = panelYMm - localY; // Invert Y
                     gridPositions.push({
-                        x: worldX,
-                        y: worldY,
+                        x: panelXMm + localX,
+                        y: panelYMm - localY,
                         grid: 'A'
                     });
                 }
             }
 
-            // Grid B positions - offset/staggered grid (shifted by 20mm on both axes)
+            // Grid B positions (offset/staggered)
             for (let localX = margin + offset; localX <= widthMm - margin; localX += spacing) {
                 for (let localY = margin + offset; localY <= heightMm - margin; localY += spacing) {
-                    const worldX = panelXMm + localX;
-                    const worldY = panelYMm - localY; // Invert Y
                     gridPositions.push({
-                        x: worldX,
-                        y: worldY,
+                        x: panelXMm + localX,
+                        y: panelYMm - localY,
                         grid: 'B'
                     });
                 }
             }
         });
 
-        console.log(`[MultiPanelManager] Generated ${gridPositions.length} grid positions for ${panelArray.length} panels`);
-        
-        // Log grid bounds for debugging
-        if (gridPositions.length > 0) {
-            const xValues = gridPositions.map(p => p.x);
-            const yValues = gridPositions.map(p => p.y);
-            console.log(`[MultiPanelManager] Grid bounds: X=[${Math.min(...xValues)}mm, ${Math.max(...xValues)}mm], Y=[${Math.min(...yValues)}mm, ${Math.max(...yValues)}mm]`);
-        }
-
         return {
             panels: panelArray,
-            totalWidth: (maxX - minX) * 1000, // in mm
-            totalHeight: (maxY - minY) * 1000, // in mm
+            totalWidth: (maxX - minX) * 1000,
+            totalHeight: (maxY - minY) * 1000,
             gridPositions
         };
     }
@@ -442,46 +419,23 @@ export class MultiPanelManager {
     public getClosestHole(worldPos: THREE.Vector3, maxDistM: number = 0.05): THREE.Vector3 | null {
         let closest: THREE.Vector3 | null = null;
         let minDistSq = maxDistM * maxDistM;
-        let closestPanel: Panel | null = null;
 
         const panelArray = Array.from(this.panels.values());
 
-        console.log(`[getClosestHole] Looking for hole near worldPos: (${worldPos.x.toFixed(4)}m, ${worldPos.y.toFixed(4)}m, ${worldPos.z.toFixed(4)}m)`);
-        console.log(`[getClosestHole] Total panels: ${panelArray.length}`);
-        console.log(`[getClosestHole] Max snap distance: ${maxDistM}m (${maxDistM * 1000}mm)`);
-
-        // For each panel, calculate grid positions and find closest hole
         for (const panel of panelArray) {
             const widthM = (panel.metadata.panel_width_cm * 10) / 1000;
             const heightM = (panel.metadata.panel_height_cm * 10) / 1000;
-            
-            // Panel bounds in world space:
-            // - X: from panel.position.x to panel.position.x + width (extends RIGHT)
-            // - Y: from panel.position.y - height to panel.position.y (extends DOWN from origin)
-            const panelBottom = panel.position.y - heightM;
-            const panelTop = panel.position.y;
-            
-            console.log(`[getClosestHole] Panel ${panel.id}: pos=(${panel.position.x.toFixed(4)}m, ${panel.position.y.toFixed(4)}m), size=${widthM.toFixed(3)}x${heightM.toFixed(3)}m, bounds Y=[${panelBottom.toFixed(4)}, ${panelTop.toFixed(4)}]`);
 
-            // Transform world position to panel-local coordinates
-            // Local X: distance from left edge (0 to width)
-            // Local Y: distance from TOP edge going DOWN (0 at top, height at bottom)
             const localX = worldPos.x - panel.position.x;
-            const localY = panel.position.y - worldPos.y; // Inverted: 0 at top, positive going down
-            
-            console.log(`[getClosestHole] Panel ${panel.id}: localPos=(${(localX * 1000).toFixed(1)}mm, ${(localY * 1000).toFixed(1)}mm)`);
+            const localY = panel.position.y - worldPos.y;
 
-            // Check if point is within panel bounds (with some tolerance)
             const tolerance = maxDistM;
             if (localX < -tolerance || localX > widthM + tolerance ||
                 localY < -tolerance || localY > heightM + tolerance) {
-                console.log(`[getClosestHole] Panel ${panel.id}: point outside panel bounds, skipping`);
                 continue;
             }
 
-            // Generate grid positions for this panel and find closest
-            // Grid positions are measured from TOP-LEFT corner
-            const spacing = panel.metadata.grid_spacing_mm / 1000; // Convert to meters
+            const spacing = panel.metadata.grid_spacing_mm / 1000;
             const offset = panel.metadata.grid_offset_mm / 1000;
             const margin = panel.metadata.border_margin_mm / 1000;
 
@@ -494,18 +448,12 @@ export class MultiPanelManager {
 
                     if (distSq < minDistSq) {
                         minDistSq = distSq;
-                        // Convert back to world coordinates
-                        // World X = panel.x + localX
-                        // World Y = panel.y - localY (invert back)
-                        // For rotated panels (-90° around X), the surface is at the panel's position
-                        // We need to calculate the actual surface position considering panel thickness
                         const surfaceZ = this.calculatePanelSurfaceZ(panel);
                         closest = new THREE.Vector3(
                             panel.position.x + gx,
                             panel.position.y - gy,
-                            surfaceZ + 0.003 // 3mm above surface (reduced from 15mm)
+                            surfaceZ + 0.003
                         );
-                        closestPanel = panel;
                     }
                 }
             }
@@ -523,42 +471,22 @@ export class MultiPanelManager {
                         closest = new THREE.Vector3(
                             panel.position.x + gx,
                             panel.position.y - gy,
-                            surfaceZ + 0.003 // 3mm above surface
+                            surfaceZ + 0.003
                         );
-                        closestPanel = panel;
                     }
                 }
             }
-        }
-
-        if (closest && closestPanel) {
-            const dist = Math.sqrt(minDistSq);
-            console.log(`[getClosestHole] ✓ Found closest hole on panel ${closestPanel.id} at (${closest.x.toFixed(4)}m, ${closest.y.toFixed(4)}m) - distance: ${(dist * 1000).toFixed(2)}mm`);
-        } else {
-            console.log(`[getClosestHole] ✗ No hole found within ${maxDistM * 1000}mm`);
         }
 
         return closest;
     }
 
     /**
-     * Calculate the actual surface Z position of a panel considering its rotation and thickness
+     * Calculate the actual surface Z position of a panel
      */
     private calculatePanelSurfaceZ(panel: Panel): number {
-        // Panels are rotated -90° around X-axis, so they lie flat
-        // The panel thickness (typically 5mm for MDF) affects the surface position
-        // For a panel rotated -90°, the surface is slightly above the panel's origin
-        
-        // Get the panel's bounding box to determine thickness
         const box = new THREE.Box3().setFromObject(panel.object);
         const size = box.getSize(new THREE.Vector3());
-        
-        // After -90° rotation around X:
-        // - Original Y becomes Z
-        // - The panel's "thickness" is now in the Z direction
-        // - We want accessories to sit on the top surface
-        
-        // The panel's top surface is at its position.z + half the thickness in Z direction
         return panel.position.z + (size.z / 2);
     }
 }

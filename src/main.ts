@@ -7,28 +7,16 @@ import { PriceCalculator } from './PriceCalculator';
 import { CartIntegration } from './CartIntegration';
 import { UIController } from './UIController';
 
-console.log('3D Pegboard Composer loaded');
-
 // Initialize configurator when DOM is ready
 const initApp = () => {
-    // Check if config is available (injected by wp_localize_script)
     const config = (window as any).Pegboard3DConfig;
 
     if (config && document.getElementById('pegboard-3d-container')) {
-        console.log('Initializing 3D Configurator with config:', config);
-
         try {
-            const controller = new UIController('pegboard-3d-container', config);
-
-            // Expose controller globally for debugging
-            (window as any).PegboardController = controller;
-
-            console.log('3D Configurator initialized successfully');
+            new UIController('pegboard-3d-container', config);
         } catch (error) {
             console.error('Failed to initialize 3D Configurator:', error);
         }
-    } else {
-        console.log('No configurator container found on this page');
     }
 };
 

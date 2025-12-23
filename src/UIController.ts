@@ -170,6 +170,12 @@ export class UIController {
      */
     private async handleProductSelect(id: number, type: string): Promise<void> {
         try {
+            // Deselect any currently selected object when starting placement
+            if (this.selectedObject) {
+                this.deselectObject();
+                this.updatePriceDisplay();
+            }
+
             const product = this.products.find(p => p.id === id);
             if (!product) return;
 
@@ -268,36 +274,19 @@ export class UIController {
 
     /**
      * Check if placing an accessory at a position would collide with existing accessories
-     * Uses 2D footprint collision detection to avoid false positives from 3D depth
-     * @param position The position to check
-     * @param ghostObject The ghost object to get footprint from
-     * @param excludeId Optional accessory ID to exclude (for dragging)
-     * @returns true if there's a collision, false if position is clear
      */
     private checkAccessoryCollision(position: THREE.Vector3, ghostObject: THREE.Object3D, excludeId?: string): boolean {
-        const shrinkAmount = 0.003; // 3mm shrink for tolerance
+        const shrinkAmount = 0.003;
         
-        // Calculate 2D footprint for ghost accessory
         const ghostFootprint = this.calculate2DFootprint(ghostObject, position);
-        if (!ghostFootprint) {
-            console.log("[checkAccessoryCollision] Could not calculate ghost 2D footprint");
-            return false;
-        }
+        if (!ghostFootprint) return false;
         
-        const ghostSize = ghostFootprint.getSize(new THREE.Vector2());
-        console.log(`[checkAccessoryCollision] Ghost 2D footprint: min=(${(ghostFootprint.min.x * 1000).toFixed(1)}, ${(ghostFootprint.min.y * 1000).toFixed(1)}), max=(${(ghostFootprint.max.x * 1000).toFixed(1)}, ${(ghostFootprint.max.y * 1000).toFixed(1)}), size: ${(ghostSize.x * 1000).toFixed(1)}x${(ghostSize.y * 1000).toFixed(1)}mm at pos (${position.x.toFixed(4)}, ${position.y.toFixed(4)})`);
-        
-        // Check against all placed accessories using 2D footprint collision
         for (const [id, accessory] of this.placedAccessories) {
             if (excludeId && id === excludeId) continue;
             
-            // Calculate 2D footprint for placed accessory
             const accessoryFootprint = this.calculate2DFootprint(accessory.object);
             if (!accessoryFootprint) continue;
             
-            const accSize = accessoryFootprint.getSize(new THREE.Vector2());
-            
-            // 2D overlap check with shrink tolerance
             const ghostMinX = ghostFootprint.min.x + shrinkAmount;
             const ghostMaxX = ghostFootprint.max.x - shrinkAmount;
             const ghostMinY = ghostFootprint.min.y + shrinkAmount;
@@ -308,14 +297,10 @@ export class UIController {
             const accMinY = accessoryFootprint.min.y + shrinkAmount;
             const accMaxY = accessoryFootprint.max.y - shrinkAmount;
             
-            // Check for 2D overlap
             const overlapX = ghostMinX < accMaxX && ghostMaxX > accMinX;
             const overlapY = ghostMinY < accMaxY && ghostMaxY > accMinY;
             
-            if (overlapX && overlapY) {
-                console.log(`[checkAccessoryCollision] 2D Collision with ${id}: acc footprint min=(${(accessoryFootprint.min.x * 1000).toFixed(1)}, ${(accessoryFootprint.min.y * 1000).toFixed(1)}), max=(${(accessoryFootprint.max.x * 1000).toFixed(1)}, ${(accessoryFootprint.max.y * 1000).toFixed(1)}), size: ${(accSize.x * 1000).toFixed(1)}x${(accSize.y * 1000).toFixed(1)}mm`);
-                return true;
-            }
+            if (overlapX && overlapY) return true;
         }
         
         return false;
@@ -472,6 +457,10 @@ export class UIController {
                     this.cancelPlacement();
                 } else if (this.isDragging) {
                     this.cancelDrag();
+                } else if (this.selectedObject) {
+                    // Also deselect on Escape
+                    this.deselectObject();
+                    this.updatePriceDisplay();
                 }
             }
             // Delete key to remove selected object
@@ -479,6 +468,36 @@ export class UIController {
                 this.deleteSelectedObject();
             }
         });
+
+        // Deselect when clicking outside the 3D container
+        document.addEventListener('click', (e) => this.handleDocumentClick(e));
+    }
+
+    /**
+     * Handle clicks outside the 3D canvas to deselect objects
+     */
+    private handleDocumentClick(event: MouseEvent): void {
+        // Don't deselect if we're dragging or placing
+        if (this.isDragging || this.isPlacingPanel) return;
+
+        // Check if click is inside the 3D container
+        const container = document.getElementById('pegboard-3d-container');
+        if (!container) return;
+
+        const target = event.target as HTMLElement;
+        
+        // If click is inside the 3D container, let handleClick manage selection
+        if (container.contains(target)) return;
+
+        // If click is on an item list element (select/delete buttons), don't deselect
+        const itemList = document.getElementById('pegboard-item-list');
+        if (itemList && itemList.contains(target)) return;
+
+        // Click is outside - deselect any selected object
+        if (this.selectedObject) {
+            this.deselectObject();
+            this.updatePriceDisplay();
+        }
     }
 
     /**
@@ -536,60 +555,44 @@ export class UIController {
             if (panels.length === 0) {
                 this.ghostPanel.visible = false;
                 this.isValidPlacement = false;
-                console.log('[handleMouseMove] Accessory - no panels exist, hiding ghost');
                 return;
             }
 
             const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
 
             if (intersection) {
-                console.log(`[handleMouseMove] Accessory - intersection point: (${intersection.point.x.toFixed(4)}m, ${intersection.point.y.toFixed(4)}m, ${intersection.point.z.toFixed(4)}m)`);
-                
                 const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
                 if (snapPos) {
-                    // Check for collision with existing accessories
                     const hasCollision = this.checkAccessoryCollision(snapPos, this.ghostPanel);
-                    
                     this.ghostPanel.position.copy(snapPos);
                     this.isValidPlacement = !hasCollision;
                     this.sceneManager.setGhostValid(this.ghostPanel, !hasCollision);
-                    
-                    if (hasCollision) {
-                        console.log(`[handleMouseMove] Accessory - ✗ collision detected at: (${snapPos.x.toFixed(4)}m, ${snapPos.y.toFixed(4)}m), isValidPlacement: false`);
-                    } else {
-                        console.log(`[handleMouseMove] Accessory - ✓ snapped to: (${snapPos.x.toFixed(4)}m, ${snapPos.y.toFixed(4)}m), isValidPlacement: true`);
-                    }
                 } else {
                     this.ghostPanel.position.copy(intersection.point);
-                    // Calculate proper surface Z position instead of fixed offset
                     const panels = this.multiPanelManager.getAllPanels();
                     if (panels.length > 0) {
-                        // Find the panel we're intersecting with and use its surface Z
                         const intersectedPanel = panels.find(p => {
                             const box = new THREE.Box3().setFromObject(p.object);
                             return box.containsPoint(intersection.point);
                         });
                         if (intersectedPanel) {
                             const surfaceZ = this.calculatePanelSurfaceZ(intersectedPanel);
-                            this.ghostPanel.position.z = surfaceZ + 0.003; // 3mm above surface
+                            this.ghostPanel.position.z = surfaceZ + 0.003;
                         } else {
-                            this.ghostPanel.position.z = 0.003; // Default minimal height
+                            this.ghostPanel.position.z = 0.003;
                         }
                     } else {
-                        this.ghostPanel.position.z = 0.003; // Default minimal height
+                        this.ghostPanel.position.z = 0.003;
                     }
                     this.isValidPlacement = false;
                     this.sceneManager.setGhostValid(this.ghostPanel, false);
-                    console.log(`[handleMouseMove] Accessory - ✗ no snap found, isValidPlacement: false`);
                 }
             } else {
-                // Mouse not over a panel - show ghost at plane intersection but mark invalid
                 const planeIntersection = this.sceneManager.getIntersectionWithPlane(event);
                 if (planeIntersection) {
                     this.ghostPanel.position.copy(planeIntersection);
                     this.isValidPlacement = false;
                     this.sceneManager.setGhostValid(this.ghostPanel, false);
-                    console.log(`[handleMouseMove] Accessory - not over panel, isValidPlacement: false`);
                 } else {
                     this.ghostPanel.visible = false;
                     this.isValidPlacement = false;
@@ -602,26 +605,20 @@ export class UIController {
      * Handle click interactions
      */
     private handleClick(event: MouseEvent): void {
-        // Don't process click if we just finished dragging
         if (this.isDragging) return;
 
         if (this.isPlacingPanel) {
-            // Re-validate placement at click time to ensure consistency
             let clickIsValid = this.isValidPlacement;
             
             if (this.placementType === 'accessory' && this.ghostPanel) {
-                // Double-check: verify the ghost position is actually on a valid snap point
-                // and doesn't collide with existing accessories
                 const panels = this.multiPanelManager.getAllPanels().map(p => p.object);
                 const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
                 
                 if (intersection) {
                     const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
                     if (snapPos) {
-                        // Check for collision
                         const hasCollision = this.checkAccessoryCollision(snapPos, this.ghostPanel);
                         clickIsValid = !hasCollision;
-                        
                         this.ghostPanel.position.copy(snapPos);
                         this.sceneManager.setGhostValid(this.ghostPanel, !hasCollision);
                     } else {
@@ -633,25 +630,14 @@ export class UIController {
                 }
             }
             
-            // Only place if ghost is visible AND placement is valid
-            console.log(`[handleClick] Placement attempt - ghostVisible: ${this.ghostPanel?.visible}, isValidPlacement: ${this.isValidPlacement}, clickIsValid: ${clickIsValid}, placementType: ${this.placementType}`);
-            
             if (this.ghostPanel && this.ghostPanel.visible && clickIsValid) {
-                console.log('[handleClick] ✓ Placing object - valid placement');
                 this.confirmPlacement();
-            } else {
-                console.log(`[handleClick] ✗ Cannot place - visible: ${this.ghostPanel?.visible}, valid: ${clickIsValid}`);
-                // Visual feedback - flash red briefly
-                if (this.ghostPanel) {
-                    this.sceneManager.setGhostValid(this.ghostPanel, false);
-                }
+            } else if (this.ghostPanel) {
+                this.sceneManager.setGhostValid(this.ghostPanel, false);
             }
         } else {
-            // Not placing. Check if clicked on existing object to select it
             const obj = this.sceneManager.getIntersectedObject(event);
             if (obj) {
-                // IMPORTANT: Check accessories FIRST since they are in front of panels
-                // This prevents selecting both when clicking on an accessory
                 let foundAccessory = false;
                 for (const [id, accessory] of this.placedAccessories) {
                     let isMatch = obj === accessory.object;
@@ -842,36 +828,23 @@ export class UIController {
         const newPosition = this.selectedObject.position.clone();
 
         if (this.selectedType === 'panel') {
-            // Get the panel being moved and its attached accessories
             const movedPanel = this.multiPanelManager.getPanel(this.selectedId);
             const attachedAccessoryIds = movedPanel ? [...movedPanel.attachedAccessories] : [];
             
-            // Update panel position in manager
             this.multiPanelManager.updatePanelPosition(this.selectedId, newPosition);
             
-            // Relocate attached accessories to valid positions
             if (attachedAccessoryIds.length > 0) {
-                console.log(`[finishDrag] Panel moved, relocating ${attachedAccessoryIds.length} accessories`);
                 this.relocateAccessoriesAfterPanelMove(attachedAccessoryIds, this.selectedId);
             }
             
-            // Re-center camera after moving panel
             this.centerCameraOnPanels();
         } else if (this.selectedType === 'accessory') {
-            // For accessories, we need to validate:
-            // 1. Must be on a valid panel
-            // 2. Must snap to a valid hole
-            // 3. Must not collide with other accessories
-            
             let isValidPlacement = false;
             let finalPosition = newPosition.clone();
             
-            // Check if position is on a panel and can snap to a hole
             const snapPos = this.multiPanelManager.getClosestHole(newPosition);
             if (snapPos) {
-                // Check for collision with other accessories (exclude the one being dragged)
                 const hasCollision = this.checkAccessoryCollision(snapPos, this.selectedObject, this.selectedId);
-                
                 if (!hasCollision) {
                     isValidPlacement = true;
                     finalPosition = snapPos;
@@ -879,162 +852,136 @@ export class UIController {
             }
             
             if (!isValidPlacement) {
-                // Invalid placement - cancel the drag and restore original position
-                console.log('[finishDrag] Invalid placement (not on panel or collision), canceling drag');
                 this.cancelDrag();
                 return;
             }
             
-            // Valid placement - update position and panel attachment
             this.selectedObject.position.copy(finalPosition);
             
-            // Update accessory's panel attachment
             const accessory = this.placedAccessories.get(this.selectedId);
             if (accessory) {
-                // Detach from old panel
                 if (accessory.panelId) {
                     this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, this.selectedId);
                 }
-                // Attach to new panel
                 const newPanel = this.multiPanelManager.getPanelAtPosition(finalPosition);
                 if (newPanel) {
                     accessory.panelId = newPanel.id;
                     this.multiPanelManager.attachAccessoryToPanel(newPanel.id, this.selectedId);
                 }
-                
-                // Update bounding box
                 accessory.boundingBox = new THREE.Box3().setFromObject(accessory.object);
             }
         }
 
-        // Reset drag state
         this.isDragging = false;
         this.dragStartPosition = null;
         this.dragOriginalPosition = null;
 
-        // Reset cursor and controls
         const container = document.getElementById('pegboard-3d-container');
         if (container) container.classList.remove('dragging');
         this.sceneManager.setControlsEnabled(true);
-
-        // Reset highlight to selection color
         this.sceneManager.highlightObject(this.selectedObject, true);
     }
 
     /**
      * Relocate accessories to valid positions after their parent panel was moved
-     * Each accessory finds the closest valid hole on any available panel
+     * Handles aligned accessories by finding alternative holes when collision occurs
      */
     private relocateAccessoriesAfterPanelMove(accessoryIds: string[], _movedPanelId: string): void {
+        if (accessoryIds.length === 0) return;
+
         for (const accId of accessoryIds) {
             const accessory = this.placedAccessories.get(accId);
             if (!accessory) continue;
 
             const currentPos = accessory.object.position.clone();
             
-            // Try to find a valid position on any panel (including the moved panel's new position)
-            let bestPosition: THREE.Vector3 | null = null;
-            let bestDistance = Infinity;
+            // Try to find a valid position, expanding search if needed
+            const validPos = this.findValidRelocationPosition(accessory, accId, currentPos);
             
-            // Get all panels
-            const allPanels = this.multiPanelManager.getAllPanels();
-            
-            for (const panel of allPanels) {
-                // Get all hole positions for this panel
-                const holePositions = this.getHolePositionsForPanel(panel);
+            if (validPos) {
+                accessory.object.position.copy(validPos);
                 
-                for (const holePos of holePositions) {
-                    // Check if this position is valid (no collision with other accessories)
-                    const hasCollision = this.checkAccessoryCollision(holePos, accessory.object, accId);
-                    
-                    if (!hasCollision) {
-                        const distance = currentPos.distanceTo(holePos);
-                        if (distance < bestDistance) {
-                            bestDistance = distance;
-                            bestPosition = holePos.clone();
-                        }
-                    }
-                }
-            }
-            
-            if (bestPosition) {
-                // Move accessory to the best valid position
-                accessory.object.position.copy(bestPosition);
-                
-                // Update panel attachment
                 if (accessory.panelId) {
                     this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, accId);
                 }
                 
-                const newPanel = this.multiPanelManager.getPanelAtPosition(bestPosition);
+                const newPanel = this.multiPanelManager.getPanelAtPosition(validPos);
                 if (newPanel) {
                     accessory.panelId = newPanel.id;
                     this.multiPanelManager.attachAccessoryToPanel(newPanel.id, accId);
                 }
                 
-                // Update bounding box
                 accessory.boundingBox = new THREE.Box3().setFromObject(accessory.object);
-                
-                console.log(`[relocateAccessories] Moved ${accId} to (${bestPosition.x.toFixed(3)}, ${bestPosition.y.toFixed(3)})`);
             } else {
-                // No valid position found - remove the accessory
-                console.log(`[relocateAccessories] No valid position for ${accId}, removing it`);
                 this.removeAccessory(accId);
             }
         }
         
-        // Update the price display to reflect any removed accessories
         this.updatePriceDisplay();
     }
 
     /**
-     * Get all hole positions for a specific panel
+     * Find a valid relocation position for an accessory
+     * Searches nearby holes and finds one without collision
      */
-    private getHolePositionsForPanel(panel: { id: string; position: THREE.Vector3; metadata: any }): THREE.Vector3[] {
-        const positions: THREE.Vector3[] = [];
+    private findValidRelocationPosition(
+        accessory: PlacedAccessory,
+        accId: string,
+        targetPos: THREE.Vector3
+    ): THREE.Vector3 | null {
+        const allPanels = this.multiPanelManager.getAllPanels();
+        if (allPanels.length === 0) return null;
+
+        // Collect candidate holes from all panels, sorted by distance
+        const candidates: { pos: THREE.Vector3; dist: number }[] = [];
         
-        const widthM = (panel.metadata.panel_width_cm * 10) / 1000;
-        const heightM = (panel.metadata.panel_height_cm * 10) / 1000;
-        const spacing = panel.metadata.grid_spacing_mm / 1000;
-        const offset = panel.metadata.grid_offset_mm / 1000;
-        const margin = panel.metadata.border_margin_mm / 1000;
-        
-        // Grid A positions
-        for (let gx = margin; gx <= widthM - margin; gx += spacing) {
-            for (let gy = margin; gy <= heightM - margin; gy += spacing) {
-                positions.push(new THREE.Vector3(
-                    panel.position.x + gx,
-                    panel.position.y - gy,
-                    0.005 // Slightly above panel surface
-                ));
+        for (const panel of allPanels) {
+            const spacing = panel.metadata.grid_spacing_mm / 1000;
+            const offset = panel.metadata.grid_offset_mm / 1000;
+            const margin = panel.metadata.border_margin_mm / 1000;
+            const widthM = (panel.metadata.panel_width_cm * 10) / 1000;
+            const heightM = (panel.metadata.panel_height_cm * 10) / 1000;
+
+            // Grid A
+            for (let gx = margin; gx <= widthM - margin; gx += spacing) {
+                for (let gy = margin; gy <= heightM - margin; gy += spacing) {
+                    const pos = new THREE.Vector3(panel.position.x + gx, panel.position.y - gy, 0.005);
+                    const dist = targetPos.distanceTo(pos);
+                    if (dist < 0.5) candidates.push({ pos, dist });
+                }
+            }
+            // Grid B
+            for (let gx = margin + offset; gx <= widthM - margin; gx += spacing) {
+                for (let gy = margin + offset; gy <= heightM - margin; gy += spacing) {
+                    const pos = new THREE.Vector3(panel.position.x + gx, panel.position.y - gy, 0.005);
+                    const dist = targetPos.distanceTo(pos);
+                    if (dist < 0.5) candidates.push({ pos, dist });
+                }
             }
         }
-        
-        // Grid B positions (offset/staggered)
-        for (let gx = margin + offset; gx <= widthM - margin; gx += spacing) {
-            for (let gy = margin + offset; gy <= heightM - margin; gy += spacing) {
-                positions.push(new THREE.Vector3(
-                    panel.position.x + gx,
-                    panel.position.y - gy,
-                    0.005
-                ));
+
+        // Sort by distance (closest first)
+        candidates.sort((a, b) => a.dist - b.dist);
+
+        // Find first position without collision
+        for (const candidate of candidates) {
+            if (!this.checkAccessoryCollision(candidate.pos, accessory.object, accId)) {
+                return candidate.pos;
             }
         }
-        
-        return positions;
+
+        return null;
     }
 
     /**
-     * Remove an accessory by ID (helper for when no valid position is found)
+     * Remove an accessory by ID
      */
     private removeAccessory(accessoryId: string): void {
         const accessory = this.placedAccessories.get(accessoryId);
         if (!accessory) return;
         
-        // Remove from scene
         this.sceneManager.removeObject(accessory.object);
         
-        // Detach from panel
         if (accessory.panelId) {
             this.multiPanelManager.detachAccessoryFromPanel(accessory.panelId, accessoryId);
         }
