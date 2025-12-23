@@ -22,7 +22,8 @@ export class SceneManager {
         // Initialize camera
         const aspect = container.clientWidth / container.clientHeight;
         this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
-        this.camera.position.set(0, 0.5, 2);
+        // Initial position: slightly angled for a pleasant 3/4 view
+        this.camera.position.set(0.2, 0.3, 1.8);
 
         // Initialize renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -295,35 +296,35 @@ export class SceneManager {
 
     /**
      * Set camera to a specific preset view
+     * All views are slightly angled for a more natural, pleasant perspective
      */
     public setCameraPreset(preset: 'front' | 'side' | 'top'): void {
-        const distance = 1.5; // Default distance
-        // target removed as unused
-
-        // Calculate center of scene if possible
-        // Ideally we pass the logical center, but for now let's assume 0,0,0 or finding bounds
-        // For presets, we usually want relative to current target OR fixed angles.
-        // Let's preserve current target but change angle.
+        const distance = 1.5;
         const currentTarget = this.controls.target.clone();
 
         let pos = new THREE.Vector3();
 
         switch (preset) {
             case 'front':
-                pos.set(0, 0, distance);
+                // Slightly angled front view - more natural perspective
+                // Small offset on X and Y for depth perception
+                pos.set(0.15, 0.1, distance);
                 break;
             case 'side':
-                pos.set(distance, 0, 0); // Side view
+                // Angled side view - not perfectly perpendicular
+                // Shows depth while maintaining side perspective
+                pos.set(distance, 0.2, 0.4);
                 break;
             case 'top':
-                pos.set(0, distance, 0.1); // Top view (slightly offset to avoid gimbal lock)
+                // Angled top view - 3/4 perspective from above
+                // Much more pleasant than straight down
+                pos.set(0.3, distance * 0.9, distance * 0.5);
                 break;
         }
 
         // Apply offset to target
         pos.add(currentTarget);
 
-        // Smoothly animate? For MVP, just set.
         this.camera.position.copy(pos);
         this.camera.lookAt(currentTarget);
         this.controls.update();

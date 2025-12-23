@@ -16060,7 +16060,7 @@ class Eg {
     Be(this, "animationId", null);
     this.container = e, this.scene = new Dm(), this.scene.background = new Ae(15790320);
     const t = e.clientWidth / e.clientHeight;
-    this.camera = new Pt(50, t, 0.1, 1e3), this.camera.position.set(0, 0.5, 2), this.renderer = new Kc({
+    this.camera = new Pt(50, t, 0.1, 1e3), this.camera.position.set(0.2, 0.3, 1.8), this.renderer = new Kc({
       antialias: !0,
       alpha: !1
     }), this.renderer.setSize(e.clientWidth, e.clientHeight), this.renderer.setPixelRatio(window.devicePixelRatio), this.renderer.outputColorSpace = it, e.appendChild(this.renderer.domElement), this.controls = new Sg(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.maxPolarAngle = Math.PI / 2, this.controls.minDistance = 0.5, this.controls.maxDistance = 10, this.setupLighting(), window.addEventListener("resize", () => this.resize());
@@ -16214,19 +16214,20 @@ class Eg {
   }
   /**
    * Set camera to a specific preset view
+   * All views are slightly angled for a more natural, pleasant perspective
    */
   setCameraPreset(e) {
     const n = this.controls.target.clone();
     let i = new R();
     switch (e) {
       case "front":
-        i.set(0, 0, 1.5);
+        i.set(0.15, 0.1, 1.5);
         break;
       case "side":
-        i.set(1.5, 0, 0);
+        i.set(1.5, 0.2, 0.4);
         break;
       case "top":
-        i.set(0, 1.5, 0.1);
+        i.set(0.3, 1.5 * 0.9, 1.5 * 0.5);
         break;
     }
     i.add(n), this.camera.position.copy(i), this.camera.lookAt(n), this.controls.update();
