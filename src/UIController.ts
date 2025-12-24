@@ -35,19 +35,20 @@ export class UIController {
 
     // Placement State
     private isPlacingPanel: boolean = false;
-    private ghostPanel: THREE.Object3D | null = null;
     private pendingProduct: ProductData | null = null;
     private pendingMetadata: any = null;
     private placementType: 'board' | 'accessory' = 'board';
     private selectedObject: THREE.Object3D | null = null;
     private selectedType: 'panel' | 'accessory' | null = null;
     private selectedId: string | null = null;
-    private isValidPlacement: boolean = true;
 
     // Dragging State
     private isDragging: boolean = false;
     private dragStartPosition: THREE.Vector3 | null = null;
     private dragOriginalPosition: THREE.Vector3 | null = null;
+
+    // Color variants tracking
+    private selectedColors: Map<number, string> = new Map();
 
     constructor(containerId: string, config: any) {
         const container = document.getElementById(containerId);
@@ -100,24 +101,14 @@ export class UIController {
         if (boards.length > 0) {
             html += `<div class="pegboard-section-title">Panneaux</div>`;
             html += `<div class="pegboard-grid">`;
-            html += boards.map(p => `
-                <button class="pegboard-product-btn" data-id="${p.id}" data-type="pegboard">
-                    <span class="product-name">${p.name}</span>
-                    <span class="product-price">${(p.price ?? 0).toFixed(2)} €</span>
-                </button>
-            `).join('');
+            html += boards.map(p => this.renderProductButton(p, 'pegboard')).join('');
             html += `</div>`;
         }
 
         if (accessories.length > 0) {
             html += `<div class="pegboard-section-title">Accessoires</div>`;
             html += `<div class="pegboard-grid">`;
-            html += accessories.map(p => `
-                <button class="pegboard-product-btn" data-id="${p.id}" data-type="accessory">
-                    <span class="product-name">${p.name}</span>
-                    <span class="product-price">${(p.price ?? 0).toFixed(2)} €</span>
-                </button>
-            `).join('');
+            html += accessories.map(p => this.renderProductButton(p, 'accessory')).join('');
             html += `</div>`;
         }
 
@@ -126,11 +117,27 @@ export class UIController {
         // Add click listeners for products
         libraryEl.querySelectorAll('.pegboard-product-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                // Don't trigger if clicking on color dot
+                if ((e.target as HTMLElement).classList.contains('color-dot')) return;
+                
                 const target = e.currentTarget as HTMLElement;
                 const id = parseInt(target.dataset.id || '0');
                 const type = target.dataset.type;
                 if (id && type) {
                     this.handleProductSelect(id, type);
+                }
+            });
+        });
+
+        // Add click listeners for color dots
+        libraryEl.querySelectorAll('.color-dot').forEach(dot => {
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const target = e.currentTarget as HTMLElement;
+                const productId = parseInt(target.dataset.productId || '0');
+                const color = target.dataset.color || '';
+                if (productId && color) {
+                    this.handleColorSelect(productId, color, target);
                 }
             });
         });
@@ -154,6 +161,80 @@ export class UIController {
         if (resetBtn) {
             resetBtn.addEventListener('click', () => this.resetConfiguration());
         }
+    }
+
+    /**
+     * Render a single product button with color variants
+     */
+    private renderProductButton(product: ProductData, type: string): string {
+        const colors = product.color_variants || [];
+        let colorDotsHtml = '';
+
+        if (colors.length > 0) {
+            colorDotsHtml = `
+                <div class="color-variants">
+                    ${colors
+                        .map(
+                            (color) => `
+                        <span class="color-dot" 
+                              data-product-id="${product.id}" 
+                              data-color="${color}"
+                              style="background-color: ${color};"
+                              title="${color}">
+                        </span>
+                    `
+                        )
+                        .join('')}
+                </div>
+            `;
+        }
+
+        return `
+            <div class="pegboard-product-btn" data-id="${product.id}" data-type="${type}" tabindex="-1">
+                <span class="product-name">${product.name}</span>
+                ${colorDotsHtml}
+                <span class="product-price">${(product.price ?? 0).toFixed(2)} €</span>
+            </div>
+        `;
+    }
+
+    /**
+     * Handle color selection for a product
+     */
+    private handleColorSelect(productId: number, color: string, dotElement: HTMLElement): void {
+        // Update active state on dots
+        const parentBtn = dotElement.closest('.pegboard-product-btn');
+        if (parentBtn) {
+            parentBtn.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            dotElement.classList.add('active');
+        }
+        
+        // Store selected color for this product
+        this.selectedColors.set(productId, color);
+        
+        // If there are placed objects of this product, update their colors
+        this.updatePlacedObjectsColor(productId, color);
+    }
+
+    /**
+     * Update color of all placed objects matching a product ID
+     */
+    private updatePlacedObjectsColor(productId: number, color: string): void {
+        // Update panels
+        const panels = this.multiPanelManager.getAllPanels();
+        const boardProduct = this.products.find(p => p.type === 'pegboard');
+        if (boardProduct && boardProduct.id === productId) {
+            panels.forEach(panel => {
+                this.sceneManager.setObjectColor(panel.object, color);
+            });
+        }
+        
+        // Update accessories
+        this.placedAccessories.forEach(accessory => {
+            if (accessory.productId === productId) {
+                this.sceneManager.setObjectColor(accessory.object, color);
+            }
+        });
     }
 
     /**
@@ -192,20 +273,11 @@ export class UIController {
         }
 
         const model = await this.modelLoader.loadModel(product.glb_url);
-        const ghost = this.sceneManager.createGhost(model.scene);
-        ghost.position.set(0, 0, 0.015); // Start slightly in front of board plane
-        ghost.visible = true; // Ensure ghost is visible
-
-        this.sceneManager.addObject(ghost);
 
         this.isPlacingPanel = true;
         this.placementType = 'accessory';
-        this.ghostPanel = ghost;
         this.pendingProduct = product;
         this.pendingMetadata = model.metadata;
-
-        // Set initial invalid state (red) since not over a panel yet
-        this.sceneManager.setGhostValid(ghost, false);
 
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
@@ -221,39 +293,22 @@ export class UIController {
         }
 
         const model = await this.modelLoader.loadModel(product.glb_url);
-        const ghost = this.sceneManager.createGhost(model.scene);
-        ghost.rotation.x = -Math.PI / 2; // Upright
-        ghost.position.set(0, 0, 0); // Start at origin
-        ghost.visible = true; // Ensure ghost is visible
-
-        this.sceneManager.addObject(ghost);
 
         this.isPlacingPanel = true;
         this.placementType = 'board';
-        this.ghostPanel = ghost;
         this.pendingProduct = product;
         this.pendingMetadata = model.metadata;
-
-        // Set initial valid state (green)
-        this.sceneManager.setGhostValid(ghost, true);
 
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
         if (container) container.classList.add('placing');
     }
 
-    // Position ghost initially at mouse or center
-    // (Will be updated by mousemove immediately if mouse is over canvas)
-
 
     /**
      * Cancel placement mode
      */
     private cancelPlacement(): void {
-        if (this.ghostPanel) {
-            this.sceneManager.removeObject(this.ghostPanel);
-            this.ghostPanel = null;
-        }
         this.isPlacingPanel = false;
         this.pendingProduct = null;
         this.pendingMetadata = null;
@@ -261,6 +316,16 @@ export class UIController {
         // Remove placing class from container
         const container = document.getElementById('pegboard-3d-container');
         if (container) container.classList.remove('placing');
+
+        // Remove focus from any product button
+        const activeElement = document.activeElement as HTMLElement;
+        if (activeElement && activeElement.closest('.pegboard-product-btn')) {
+            activeElement.blur();
+        }
+        // Also blur any focused product button
+        document.querySelectorAll('.pegboard-product-btn').forEach((btn) => {
+            (btn as HTMLElement).blur();
+        });
     }
 
     /**
@@ -350,87 +415,23 @@ export class UIController {
     }
 
     /**
-     * Calculate the actual surface Z position of a panel considering its rotation and thickness
-     */
-    private calculatePanelSurfaceZ(panel: any): number {
-        // Panels are rotated -90° around X-axis, so they lie flat
-        // Get the panel's bounding box to determine thickness
-        const box = new THREE.Box3().setFromObject(panel.object);
-        const size = box.getSize(new THREE.Vector3());
-        
-        // After -90° rotation around X:
-        // - The panel's top surface is at its position.z + half the thickness in Z direction
-        return panel.position.z + (size.z / 2);
-    }
-
-    /**
-     * Confirm placement at current ghost position
-     */
-    private confirmPlacement(): void {
-        if (!this.ghostPanel || !this.ghostPanel.visible || !this.pendingProduct || !this.pendingMetadata) return;
-
-        const position = this.ghostPanel.position.clone();
-        const rotation = this.ghostPanel.rotation.clone();
-
-        this.modelLoader.loadModel(this.pendingProduct.glb_url).then(model => {
-            // Clone with unique materials to prevent shared material issues
-            const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
-            scene.rotation.copy(rotation);
-
-            if (this.placementType === 'board') {
-                const panel = this.multiPanelManager.addPanel(scene, this.pendingMetadata, position);
-                this.sceneManager.addObject(panel.object);
-                this.priceCalculator.addItem(this.pendingProduct!.id, 1);
-
-                // Camera fit
-                const allPanels = this.multiPanelManager.getAllPanels().map(p => p.object);
-                this.sceneManager.fitCameraToSelection(allPanels);
-
-            } else if (this.placementType === 'accessory') {
-                scene.position.copy(position);
-                this.sceneManager.addObject(scene);
-
-                // Track accessory with bounding box for collision detection
-                const accessoryId = `acc_${this.nextAccessoryId++}`;
-                const panel = this.multiPanelManager.getPanelAtPosition(position);
-                
-                // Calculate bounding box
-                const boundingBox = new THREE.Box3().setFromObject(scene);
-                
-                const placedAccessory: PlacedAccessory = {
-                    id: accessoryId,
-                    object: scene,
-                    productId: this.pendingProduct!.id,
-                    panelId: panel ? panel.id : null,
-                    boundingBox: boundingBox
-                };
-                this.placedAccessories.set(accessoryId, placedAccessory);
-
-                // Track accessory attachment to panel
-                if (panel) {
-                    this.multiPanelManager.attachAccessoryToPanel(panel.id, accessoryId);
-                }
-
-                this.priceCalculator.addItem(this.pendingProduct!.id, 1);
-            }
-
-            this.updatePriceDisplay();
-            this.cancelPlacement();
-        });
-    }
-
-    /**
      * Setup event listeners
      */
     private setupEventListeners(): void {
         // CRITICAL: Use the Three.js canvas for mouse events, not the outer container
         const canvas = this.sceneManager.getCanvasElement();
 
+        // Mouse events
         canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e as MouseEvent));
         canvas.addEventListener('click', (e) => this.handleClick(e as MouseEvent));
         canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e as MouseEvent));
         canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e as MouseEvent));
         canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
+
+        // Touch events for mobile support
+        canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
 
         // Add to cart button
         const cartButton = document.getElementById('pegboard-add-to-cart');
@@ -500,96 +501,7 @@ export class UIController {
             this.handleDragMove(event);
             return;
         }
-
-        // Handle placement ghost
-        if (!this.isPlacingPanel || !this.ghostPanel || !this.pendingMetadata) return;
-
-        // Always show ghost during placement
-        this.ghostPanel.visible = true;
-
-        if (this.placementType === 'board') {
-            const intersection = this.sceneManager.getIntersectionWithPlane(event);
-            if (!intersection) {
-                this.ghostPanel.visible = false;
-                return;
-            }
-
-            const snapPositions = this.multiPanelManager.getSnapPositions(this.pendingMetadata);
-            let bestPos = intersection.clone();
-            let minDistance = Infinity;
-            let foundSnap = false;
-
-            if (snapPositions.length > 0) {
-                for (const pos of snapPositions) {
-                    const dist = intersection.distanceTo(pos);
-                    if (dist < 0.5) {
-                        if (dist < minDistance) {
-                            minDistance = dist;
-                            bestPos = pos;
-                            foundSnap = true;
-                        }
-                    }
-                }
-            }
-
-            const hasPanels = this.multiPanelManager.getAllPanels().length > 0;
-
-            // Determine if placement is valid
-            this.isValidPlacement = !hasPanels || foundSnap;
-
-            // Always show ghost, but change color based on validity
-            this.ghostPanel.position.copy(bestPos);
-            this.sceneManager.setGhostValid(this.ghostPanel, this.isValidPlacement);
-
-        } else if (this.placementType === 'accessory') {
-            const panels = this.multiPanelManager.getAllPanels().map(p => p.object);
-            if (panels.length === 0) {
-                this.ghostPanel.visible = false;
-                this.isValidPlacement = false;
-                return;
-            }
-
-            const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
-
-            if (intersection) {
-                const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
-                if (snapPos) {
-                    const hasCollision = this.checkAccessoryCollision(snapPos, this.ghostPanel);
-                    this.ghostPanel.position.copy(snapPos);
-                    this.isValidPlacement = !hasCollision;
-                    this.sceneManager.setGhostValid(this.ghostPanel, !hasCollision);
-                } else {
-                    this.ghostPanel.position.copy(intersection.point);
-                    const panels = this.multiPanelManager.getAllPanels();
-                    if (panels.length > 0) {
-                        const intersectedPanel = panels.find(p => {
-                            const box = new THREE.Box3().setFromObject(p.object);
-                            return box.containsPoint(intersection.point);
-                        });
-                        if (intersectedPanel) {
-                            const surfaceZ = this.calculatePanelSurfaceZ(intersectedPanel);
-                            this.ghostPanel.position.z = surfaceZ + 0.003;
-                        } else {
-                            this.ghostPanel.position.z = 0.003;
-                        }
-                    } else {
-                        this.ghostPanel.position.z = 0.003;
-                    }
-                    this.isValidPlacement = false;
-                    this.sceneManager.setGhostValid(this.ghostPanel, false);
-                }
-            } else {
-                const planeIntersection = this.sceneManager.getIntersectionWithPlane(event);
-                if (planeIntersection) {
-                    this.ghostPanel.position.copy(planeIntersection);
-                    this.isValidPlacement = false;
-                    this.sceneManager.setGhostValid(this.ghostPanel, false);
-                } else {
-                    this.ghostPanel.visible = false;
-                    this.isValidPlacement = false;
-                }
-            }
-        }
+        // No ghost preview - placement happens directly on click
     }
 
     /**
@@ -598,35 +510,51 @@ export class UIController {
     private handleClick(event: MouseEvent): void {
         if (this.isDragging) return;
 
-        if (this.isPlacingPanel) {
-            let clickIsValid = this.isValidPlacement;
-            
-            if (this.placementType === 'accessory' && this.ghostPanel) {
+        if (this.isPlacingPanel && this.pendingProduct && this.pendingMetadata) {
+            if (this.placementType === 'accessory') {
                 const panels = this.multiPanelManager.getAllPanels().map(p => p.object);
-                const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
+                if (panels.length === 0) return;
                 
-                if (intersection) {
-                    const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
-                    if (snapPos) {
-                        const hasCollision = this.checkAccessoryCollision(snapPos, this.ghostPanel);
-                        clickIsValid = !hasCollision;
-                        this.ghostPanel.position.copy(snapPos);
-                        this.sceneManager.setGhostValid(this.ghostPanel, !hasCollision);
-                    } else {
-                        clickIsValid = false;
-                        this.sceneManager.setGhostValid(this.ghostPanel, false);
+                const intersection = this.sceneManager.getIntersectionWithObjects(event, panels);
+                if (!intersection) return;
+                
+                const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
+                if (!snapPos) return;
+                
+                // Check collision with a temporary object at snap position
+                const tempBox = new THREE.Box3();
+                tempBox.setFromCenterAndSize(snapPos, new THREE.Vector3(0.02, 0.02, 0.02));
+                
+                // Place accessory directly
+                this.placeAccessoryAt(snapPos);
+                
+            } else if (this.placementType === 'board') {
+                const intersection = this.sceneManager.getIntersectionWithPlane(event);
+                if (!intersection) return;
+                
+                const snapPositions = this.multiPanelManager.getSnapPositions(this.pendingMetadata);
+                const hasPanels = this.multiPanelManager.getAllPanels().length > 0;
+                
+                let bestPos = intersection.clone();
+                let foundSnap = false;
+                let minDistance = Infinity;
+                
+                for (const pos of snapPositions) {
+                    const dist = intersection.distanceTo(pos);
+                    if (dist < 0.5 && dist < minDistance) {
+                        minDistance = dist;
+                        bestPos = pos;
+                        foundSnap = true;
                     }
-                } else {
-                    clickIsValid = false;
+                }
+                
+                // First board can be placed anywhere, subsequent boards need snap
+                if (!hasPanels || foundSnap) {
+                    this.placeBoardAt(bestPos);
                 }
             }
-            
-            if (this.ghostPanel && this.ghostPanel.visible && clickIsValid) {
-                this.confirmPlacement();
-            } else if (this.ghostPanel) {
-                this.sceneManager.setGhostValid(this.ghostPanel, false);
-            }
         } else {
+            // Selection mode
             const obj = this.sceneManager.getIntersectedObject(event);
             if (obj) {
                 let foundAccessory = false;
@@ -644,7 +572,6 @@ export class UIController {
                     }
                 }
 
-                // If not an accessory, check if it's a panel
                 if (!foundAccessory) {
                     const panels = this.multiPanelManager.getAllPanels();
                     let foundPanel = false;
@@ -670,6 +597,73 @@ export class UIController {
                 this.deselectObject();
             }
         }
+    }
+
+    /**
+     * Place a board at the specified position
+     */
+    private async placeBoardAt(position: THREE.Vector3): Promise<void> {
+        if (!this.pendingProduct || !this.pendingMetadata) return;
+        
+        const productId = this.pendingProduct.id;
+        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
+        scene.rotation.x = -Math.PI / 2;
+
+        const selectedColor = this.selectedColors.get(productId);
+        if (selectedColor) {
+            this.sceneManager.setObjectColor(scene, selectedColor, 0);
+        }
+
+        const panel = this.multiPanelManager.addPanel(scene, this.pendingMetadata, position);
+        this.sceneManager.addObject(panel.object);
+        this.priceCalculator.addItem(productId, 1);
+
+        const allPanels = this.multiPanelManager.getAllPanels().map(p => p.object);
+        this.sceneManager.fitCameraToSelection(allPanels);
+
+        this.updatePriceDisplay();
+        this.cancelPlacement();
+    }
+
+    /**
+     * Place an accessory at the specified position
+     */
+    private async placeAccessoryAt(position: THREE.Vector3): Promise<void> {
+        if (!this.pendingProduct) return;
+        
+        const productId = this.pendingProduct.id;
+        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
+        scene.position.copy(position);
+
+        const selectedColor = this.selectedColors.get(productId);
+        if (selectedColor) {
+            this.sceneManager.setObjectColor(scene, selectedColor, 0);
+        }
+
+        this.sceneManager.addObject(scene);
+
+        const accessoryId = `acc_${this.nextAccessoryId++}`;
+        const panel = this.multiPanelManager.getPanelAtPosition(position);
+        const boundingBox = new THREE.Box3().setFromObject(scene);
+        
+        const placedAccessory: PlacedAccessory = {
+            id: accessoryId,
+            object: scene,
+            productId: productId,
+            panelId: panel ? panel.id : null,
+            boundingBox: boundingBox
+        };
+        this.placedAccessories.set(accessoryId, placedAccessory);
+
+        if (panel) {
+            this.multiPanelManager.attachAccessoryToPanel(panel.id, accessoryId);
+        }
+
+        this.priceCalculator.addItem(productId, 1);
+        this.updatePriceDisplay();
+        this.cancelPlacement();
     }
 
     /**
@@ -727,6 +721,144 @@ export class UIController {
         if (this.isDragging) {
             this.cancelDrag();
         }
+    }
+
+    /**
+     * Convert touch event to mouse-like coordinates
+     */
+    private touchToMouseEvent(touch: Touch): MouseEvent {
+        return {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            preventDefault: () => {},
+            stopPropagation: () => {}
+        } as unknown as MouseEvent;
+    }
+
+    /**
+     * Track if we're in a touch-drag operation (to distinguish from camera rotation)
+     */
+    private touchStartedOnSelected: boolean = false;
+    private touchStartTime: number = 0;
+    private touchStartPos: { x: number; y: number } | null = null;
+
+    /**
+     * Handle touch start - check if touching selected object to start drag
+     */
+    private handleTouchStart(event: TouchEvent): void {
+        if (event.touches.length !== 1) return; // Only handle single touch
+
+        const touch = event.touches[0];
+        const mouseEvent = this.touchToMouseEvent(touch);
+        
+        this.touchStartTime = Date.now();
+        this.touchStartPos = { x: touch.clientX, y: touch.clientY };
+        this.touchStartedOnSelected = false;
+
+        // If placing, let the touch move handle ghost positioning
+        if (this.isPlacingPanel) {
+            event.preventDefault();
+            this.handleMouseMove(mouseEvent);
+            return;
+        }
+
+        // Check if touching the selected object
+        if (this.selectedObject && this.selectedId) {
+            const obj = this.sceneManager.getIntersectedObject(mouseEvent);
+            if (obj) {
+                let isSelectedObject = obj === this.selectedObject;
+                if (!isSelectedObject) {
+                    obj.traverseAncestors((ancestor) => {
+                        if (ancestor === this.selectedObject) isSelectedObject = true;
+                    });
+                }
+
+                if (isSelectedObject) {
+                    // Mark that touch started on selected object
+                    this.touchStartedOnSelected = true;
+                    event.preventDefault(); // Prevent OrbitControls from taking over
+                    
+                    // Start dragging immediately
+                    this.isDragging = true;
+                    this.dragOriginalPosition = this.selectedObject.position.clone();
+
+                    const intersection = this.sceneManager.getIntersectionWithPlane(mouseEvent);
+                    if (intersection) {
+                        this.dragStartPosition = intersection.clone();
+                    }
+
+                    const container = document.getElementById('pegboard-3d-container');
+                    if (container) container.classList.add('dragging');
+
+                    this.sceneManager.setControlsEnabled(false);
+                    return;
+                }
+            }
+        }
+
+        // Not touching selected object - let OrbitControls handle it for camera rotation
+    }
+
+    /**
+     * Handle touch move - drag object or update ghost position
+     */
+    private handleTouchMove(event: TouchEvent): void {
+        if (event.touches.length !== 1) return;
+
+        const touch = event.touches[0];
+        const mouseEvent = this.touchToMouseEvent(touch);
+
+        // If dragging, handle drag movement
+        if (this.isDragging && this.touchStartedOnSelected) {
+            event.preventDefault();
+            this.handleDragMove(mouseEvent);
+            return;
+        }
+
+        // If placing, update ghost position
+        if (this.isPlacingPanel) {
+            event.preventDefault();
+            this.handleMouseMove(mouseEvent);
+            return;
+        }
+
+        // Otherwise, let OrbitControls handle camera rotation
+    }
+
+    /**
+     * Handle touch end - finish drag or handle tap for selection/placement
+     */
+    private handleTouchEnd(event: TouchEvent): void {
+        const touchDuration = Date.now() - this.touchStartTime;
+        const wasDragging = this.isDragging && this.touchStartedOnSelected;
+
+        // If we were dragging, finish the drag
+        if (wasDragging) {
+            event.preventDefault();
+            this.finishDrag();
+            this.touchStartedOnSelected = false;
+            this.touchStartPos = null;
+            return;
+        }
+
+        // Check if this was a tap (short touch without much movement)
+        if (event.changedTouches.length === 1 && this.touchStartPos) {
+            const touch = event.changedTouches[0];
+            const moveDistance = Math.sqrt(
+                Math.pow(touch.clientX - this.touchStartPos.x, 2) +
+                Math.pow(touch.clientY - this.touchStartPos.y, 2)
+            );
+
+            // If it was a quick tap with minimal movement, treat as click
+            if (touchDuration < 300 && moveDistance < 10) {
+                event.preventDefault();
+                const mouseEvent = this.touchToMouseEvent(touch);
+                this.handleClick(mouseEvent);
+            }
+        }
+
+        this.touchStartedOnSelected = false;
+        this.touchStartPos = null;
     }
 
     /**
@@ -1117,7 +1249,9 @@ export class UIController {
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.rotation.x = -Math.PI / 2;
 
-        const panel = this.multiPanelManager.addPanel(scene, model.metadata as any);
+        // Always place first board at origin (0, 0, 0)
+        const position = new THREE.Vector3(0, 0, 0);
+        const panel = this.multiPanelManager.addPanel(scene, model.metadata as any, position);
         this.sceneManager.addObject(panel.object);
         this.priceCalculator.addItem(product.id, 1);
         this.updatePriceDisplay();

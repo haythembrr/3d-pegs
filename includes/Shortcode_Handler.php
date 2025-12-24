@@ -209,6 +209,7 @@ class Shortcode_Handler {
 				'type' => 'pegboard',
 				'price' => $price,
 				'glb_url' => $config['glb_url'],
+				'color_variants' => $config['color_variants'],
 				'metadata' => $config
 			);
 		}
@@ -233,6 +234,7 @@ class Shortcode_Handler {
 				'type' => 'accessory',
 				'price' => $price,
 				'glb_url' => $config['glb_url'],
+				'color_variants' => $config['color_variants'],
 				'metadata' => $config
 			);
 		}

@@ -146,17 +146,19 @@ export class SceneManager {
     public createGhost(model: THREE.Object3D): THREE.Object3D {
         const ghost = model.clone(true);
         ghost.traverse((child) => {
-            child.raycast = () => { }; // Disable raycasting for ghost
+            child.raycast = () => {}; // Disable raycasting for ghost
             if (child instanceof THREE.Mesh) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
 
                 child.material = materials.map((m: THREE.Material) => {
                     const clone = (m as THREE.MeshStandardMaterial).clone();
                     clone.transparent = true;
-                    clone.opacity = 0.6;
+                    clone.opacity = 0.7;
                     clone.depthWrite = false;
+                    // Set base color to be tinted by emissive
+                    clone.color = new THREE.Color(0x888888);
                     clone.emissive = new THREE.Color(0x00ff00); // Start green (valid)
-                    clone.emissiveIntensity = 0.3;
+                    clone.emissiveIntensity = 0.6;
                     clone.needsUpdate = true;
                     return clone;
                 });
@@ -176,11 +178,14 @@ export class SceneManager {
         const color = isValid ? 0x00ff00 : 0xff0000; // Green or Red
         ghost.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material) {
-                const mat = child.material as THREE.MeshStandardMaterial;
-                if (mat.emissive) {
-                    mat.emissive.setHex(color);
-                    mat.emissiveIntensity = 0.4;
-                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((mat) => {
+                    if (mat instanceof THREE.MeshStandardMaterial) {
+                        mat.emissive.setHex(color);
+                        mat.emissiveIntensity = 0.6;
+                        mat.needsUpdate = true;
+                    }
+                });
             }
         });
     }
@@ -295,45 +300,38 @@ export class SceneManager {
     }
 
     /**
-     * Set camera to a specific preset view
+     * Set camera to a specific preset view with smooth animation
      * All views are slightly angled for a more natural, pleasant perspective
      */
-    public setCameraPreset(preset: 'front' | 'side' | 'top'): void {
+    public setCameraPreset(preset: 'front' | 'side' | 'top', duration: number = 600): void {
         const distance = 1.5;
         const currentTarget = this.controls.target.clone();
 
-        let pos = new THREE.Vector3();
+        let targetPos = new THREE.Vector3();
 
         switch (preset) {
             case 'front':
-                // Slightly angled front view - more natural perspective
-                // Small offset on X and Y for depth perception
-                pos.set(0.15, 0.1, distance);
+                targetPos.set(0.15, 0.1, distance);
                 break;
             case 'side':
-                // Angled side view - not perfectly perpendicular
-                // Shows depth while maintaining side perspective
-                pos.set(distance, 0.2, 0.4);
+                targetPos.set(distance, 0.2, 0.4);
                 break;
             case 'top':
-                // Angled top view - 3/4 perspective from above
-                // Much more pleasant than straight down
-                pos.set(0.3, distance * 0.9, distance * 0.5);
+                targetPos.set(0.3, distance * 0.9, distance * 0.5);
                 break;
         }
 
         // Apply offset to target
-        pos.add(currentTarget);
+        targetPos.add(currentTarget);
 
-        this.camera.position.copy(pos);
-        this.camera.lookAt(currentTarget);
-        this.controls.update();
+        // Animate camera movement
+        this.animateCameraTo(targetPos, currentTarget, duration);
     }
 
     /**
-     * Fit camera to view all objects in the list
+     * Fit camera to view all objects in the list with smooth animation
      */
-    public fitCameraToSelection(objects: THREE.Object3D[]): void {
+    public fitCameraToSelection(objects: THREE.Object3D[], duration: number = 500): void {
         if (objects.length === 0) return;
 
         const box = new THREE.Box3();
@@ -348,19 +346,106 @@ export class SceneManager {
         const maxSize = Math.max(size.x, size.y, size.z);
         const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this.camera.fov / 360));
         const fitWidthDistance = fitHeightDistance / this.camera.aspect;
-        const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance); // 1.2 margin
+        const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance);
 
         const direction = this.camera.position.clone().sub(this.controls.target).normalize().multiplyScalar(distance);
+        const targetPos = center.clone().add(direction);
 
-        // Move camera
-        this.camera.position.copy(center).add(direction);
-        this.controls.target.copy(center);
+        // Animate camera movement
+        this.animateCameraTo(targetPos, center, duration);
+    }
 
-        // Ensure camera is not too far or too close if limited
-        // this.camera.position.clamp(...) 
+    /**
+     * Animate camera smoothly to a new position and target
+     */
+    private animateCameraTo(targetPosition: THREE.Vector3, targetLookAt: THREE.Vector3, duration: number): void {
+        const startPosition = this.camera.position.clone();
+        const startTarget = this.controls.target.clone();
+        const startTime = performance.now();
 
-        this.camera.updateProjectionMatrix();
-        this.controls.update();
+        // Easing function - ease out cubic for smooth deceleration
+        const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
+
+        const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = easeOutCubic(progress);
+
+            // Interpolate position
+            this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+            
+            // Interpolate target
+            this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+
+            this.camera.updateProjectionMatrix();
+            this.controls.update();
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        animate();
+    }
+
+    /**
+     * Change the color of an object's materials with smooth transition
+     * @param obj The 3D object to recolor
+     * @param hexColor The target color in hex format (e.g., '#ff0000')
+     * @param duration Animation duration in ms (default 300ms)
+     */
+    public setObjectColor(obj: THREE.Object3D, hexColor: string, duration: number = 300): void {
+        const targetColor = new THREE.Color(hexColor);
+
+        // Collect all materials
+        const materialData: { material: THREE.MeshStandardMaterial; startColor: THREE.Color }[] = [];
+
+        obj.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((mat) => {
+                    if (mat instanceof THREE.MeshStandardMaterial && mat.color) {
+                        materialData.push({
+                            material: mat,
+                            startColor: mat.color.clone()
+                        });
+                    }
+                });
+            }
+        });
+
+        if (materialData.length === 0) return;
+
+        // If duration is 0 or very small, apply instantly
+        if (duration <= 0) {
+            materialData.forEach(({ material }) => {
+                material.color.copy(targetColor);
+                material.needsUpdate = true;
+            });
+            return;
+        }
+
+        const startTime = performance.now();
+
+        // Animate color transition
+        const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Smooth easing
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            materialData.forEach(({ material, startColor }) => {
+                material.color.lerpColors(startColor, targetColor, eased);
+                material.needsUpdate = true;
+            });
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        animate();
     }
 
     /**

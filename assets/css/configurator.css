@@ -223,7 +223,7 @@
 .pegboard-product-btn {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     padding: 10px 12px;
     background: var(--pb-bg);
     border: 1px solid var(--pb-border);
@@ -232,6 +232,12 @@
     text-align: left;
     font-family: var(--pb-font);
     transition: all 0.15s ease;
+    overflow: hidden;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .pegboard-product-btn:hover {
@@ -242,6 +248,28 @@
 
 .pegboard-product-btn:active {
     transform: translateY(0);
+    background: #dbeafe;
+}
+
+/* Disable hover effects on touch devices */
+@media (hover: none) and (pointer: coarse) {
+    .pegboard-product-btn:hover {
+        border-color: var(--pb-border);
+        background: var(--pb-bg);
+        transform: none;
+    }
+    
+    .pegboard-product-btn:active {
+        border-color: var(--pb-primary);
+        background: #dbeafe;
+    }
+}
+
+.pegboard-product-btn:focus,
+.pegboard-product-btn:focus-visible,
+.pegboard-product-btn:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 .pegboard-product-btn .product-name {
@@ -256,6 +284,38 @@
 .pegboard-product-btn .product-price {
     font-size: 12px;
     color: var(--pb-text-secondary);
+}
+
+/* Color Variants */
+.color-variants {
+    display: flex;
+    gap: 5px;
+    margin: 2px 0;
+    flex-wrap: wrap;
+}
+
+.color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.color-dot:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.color-dot.active {
+    border-color: var(--pb-primary);
+    box-shadow: 0 0 0 2px var(--pb-primary), 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* Price Display */
@@ -565,14 +625,30 @@
         min-height: 100%;
     }
 
-    /* Camera controls - horizontal layout on mobile */
+    /* Camera controls - move to bottom on mobile */
     .pegboard-scene-controls {
-        top: 12px;
+        top: auto;
+        bottom: 12px;
         left: 12px;
         right: 12px;
         flex-direction: row;
-        justify-content: space-between;
-        align-items: flex-start;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .pegboard-camera-controls {
+        padding: 3px;
+    }
+
+    .pegboard-camera-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    .pegboard-reset-btn {
+        padding: 6px 10px;
+        font-size: 12px;
     }
 
     /* Sidebar takes remaining space, scrollable */
@@ -609,25 +685,26 @@
         min-height: 260px;
     }
 
+    /* Keep controls at bottom, compact */
     .pegboard-scene-controls {
-        flex-direction: column;
-        align-items: stretch;
+        bottom: 8px;
+        left: 8px;
+        right: 8px;
         gap: 6px;
     }
 
     .pegboard-camera-controls {
-        justify-content: center;
+        padding: 2px;
     }
 
     .pegboard-camera-btn {
-        padding: 8px 12px;
-        font-size: 12px;
+        padding: 5px 8px;
+        font-size: 11px;
     }
 
     .pegboard-reset-btn {
-        justify-content: center;
-        padding: 8px 12px;
-        font-size: 12px;
+        padding: 5px 8px;
+        font-size: 11px;
     }
 
     .pegboard-sidebar-header {

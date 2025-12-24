@@ -49,6 +49,10 @@ class Product_3D_Integration {
 		$panel_height = get_post_meta( $post->ID, '_pegboard_3d_panel_height_cm', true );
         $peg_count = get_post_meta( $post->ID, '_pegboard_3d_peg_count', true );
         $snap_mode = get_post_meta( $post->ID, '_pegboard_3d_snap_mode', true );
+        $color_variants = get_post_meta( $post->ID, '_pegboard_3d_color_variants', true );
+        if ( empty( $color_variants ) ) {
+            $color_variants = '';
+        }
         
 		// HTML Output
 		?>
@@ -65,6 +69,12 @@ class Product_3D_Integration {
 			<p>
 				<label for="pegboard_3d_glb_url"><?php _e( 'URL fichier GLB:', '3d-pegs' ); ?></label>
 				<input type="text" name="pegboard_3d_glb_url" id="pegboard_3d_glb_url" value="<?php echo esc_url( $glb_url ); ?>" class="widefat">
+			</p>
+
+			<p>
+				<label for="pegboard_3d_color_variants"><?php _e( 'Variantes de couleur (hex, séparées par virgule):', '3d-pegs' ); ?></label>
+				<input type="text" name="pegboard_3d_color_variants" id="pegboard_3d_color_variants" value="<?php echo esc_attr( $color_variants ); ?>" class="widefat" placeholder="#1a1a2e, #16213e, #0f3460, #e94560">
+				<span class="description"><?php _e( 'Ex: #1a1a2e, #16213e, #0f3460 - La première couleur est la couleur par défaut', '3d-pegs' ); ?></span>
 			</p>
             
             <div id="pegboard-3d-preview-area">
@@ -159,6 +169,10 @@ class Product_3D_Integration {
         if ( isset( $_POST['pegboard_3d_snap_mode'] ) ) {
 			update_post_meta( $post_id, '_pegboard_3d_snap_mode', sanitize_text_field( $_POST['pegboard_3d_snap_mode'] ) );
 		}
+        
+        if ( isset( $_POST['pegboard_3d_color_variants'] ) ) {
+			update_post_meta( $post_id, '_pegboard_3d_color_variants', sanitize_text_field( $_POST['pegboard_3d_color_variants'] ) );
+		}
 	}
     
     /**
@@ -169,6 +183,18 @@ class Product_3D_Integration {
      * @return array
      */
     public static function get_3d_config( $product_id ) {
+        $color_variants_raw = get_post_meta( $product_id, '_pegboard_3d_color_variants', true );
+        $color_variants = array();
+        if ( ! empty( $color_variants_raw ) ) {
+            $colors = explode( ',', $color_variants_raw );
+            foreach ( $colors as $color ) {
+                $color = trim( $color );
+                if ( ! empty( $color ) ) {
+                    $color_variants[] = $color;
+                }
+            }
+        }
+        
         return array(
             'type'            => get_post_meta( $product_id, '_pegboard_3d_type', true ),
             'glb_url'         => get_post_meta( $product_id, '_pegboard_3d_glb_url', true ),
@@ -176,6 +202,7 @@ class Product_3D_Integration {
             'panel_height_cm' => get_post_meta( $product_id, '_pegboard_3d_panel_height_cm', true ),
             'peg_count'       => get_post_meta( $product_id, '_pegboard_3d_peg_count', true ),
             'snap_mode'       => get_post_meta( $product_id, '_pegboard_3d_snap_mode', true ),
+            'color_variants'  => $color_variants,
         );
     }
 }

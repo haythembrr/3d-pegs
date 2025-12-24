@@ -42,5 +42,6 @@ export interface ProductData {
     type: 'pegboard' | 'accessory';
     glb_url: string;
     price?: number;
+    color_variants?: string[]; // Array of hex colors like ['#1a1a2e', '#16213e']
     [key: string]: any;
 }
