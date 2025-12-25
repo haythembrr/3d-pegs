@@ -208,6 +208,19 @@
     background: var(--pb-danger-light);
 }
 
+/* Theme toggle button */
+.pegboard-theme-btn {
+    transition: transform 0.3s ease, background 0.15s ease;
+}
+
+.pegboard-theme-btn:hover {
+    background: #fef3c7;
+}
+
+.pegboard-theme-btn:active {
+    transform: rotate(180deg);
+}
+
 /* Help button with tooltip */
 .pegboard-help-btn-wrapper {
     position: relative;
@@ -365,6 +378,25 @@
     .pegboard-product-btn:active {
         border-color: var(--pb-primary);
         background: #dbeafe;
+    }
+    
+    /* Preserve active state on touch devices */
+    .pegboard-product-btn.active {
+        border-color: var(--pb-primary);
+        background: #dbeafe;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    
+    /* Help tooltip - controlled by JS on touch devices */
+    .pegboard-help-btn-wrapper:hover .pegboard-help-tooltip {
+        opacity: 0;
+        visibility: hidden;
+    }
+    
+    .pegboard-help-tooltip.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
     }
 }
 

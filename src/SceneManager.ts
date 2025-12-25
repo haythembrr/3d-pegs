@@ -436,6 +436,18 @@ export class SceneManager {
     }
 
     /**
+     * Set the scene background color
+     * @param isDark Whether to use dark mode
+     */
+    public setDarkMode(isDark: boolean): void {
+        if (isDark) {
+            this.scene.background = new THREE.Color(0x1a1a2e);
+        } else {
+            this.scene.background = new THREE.Color(0xf5f5f5);
+        }
+    }
+
+    /**
      * Cleanup
      */
     public dispose(): void {

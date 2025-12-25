@@ -60,6 +60,9 @@ class Shortcode_Handler {
 
 				<!-- Action controls overlay (right) -->
 				<div class="pegboard-action-controls">
+					<button class="pegboard-action-btn pegboard-theme-btn" id="pegboard-theme-toggle" title="<?php esc_attr_e( 'Mode nuit', '3d-pegs' ); ?>">
+						☀️
+					</button>
 					<button class="pegboard-action-btn pegboard-delete-btn hidden" id="pegboard-delete-selected" title="<?php esc_attr_e( 'Supprimer la sélection', '3d-pegs' ); ?>">
 						🗑️
 					</button>

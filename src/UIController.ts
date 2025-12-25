@@ -191,6 +191,73 @@ export class UIController {
         if (deleteBtn) {
             deleteBtn.addEventListener('click', () => this.deleteSelectedObject());
         }
+        
+        // Theme toggle button
+        const themeBtn = document.getElementById('pegboard-theme-toggle');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', () => this.toggleDarkMode(themeBtn));
+        }
+        
+        // Help button tooltip for mobile (touch devices)
+        this.setupMobileHelpTooltip();
+    }
+    
+    /**
+     * Setup mobile help tooltip behavior (tap to show, tap anywhere to hide)
+     */
+    private setupMobileHelpTooltip(): void {
+        const helpBtn = document.getElementById('pegboard-help-btn');
+        const tooltip = document.querySelector('.pegboard-help-tooltip') as HTMLElement;
+        
+        if (!helpBtn || !tooltip) return;
+        
+        // Check if touch device
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if (isTouchDevice) {
+            helpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = tooltip.classList.contains('visible');
+                tooltip.classList.toggle('visible', !isVisible);
+            });
+            
+            // Close tooltip when tapping anywhere else
+            document.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                if (!helpBtn.contains(target) && !tooltip.contains(target)) {
+                    tooltip.classList.remove('visible');
+                }
+            });
+            
+            // Also close on touch start anywhere else
+            document.addEventListener('touchstart', (e) => {
+                const target = e.target as HTMLElement;
+                if (!helpBtn.contains(target) && !tooltip.contains(target)) {
+                    tooltip.classList.remove('visible');
+                }
+            }, { passive: true });
+        }
+    }
+    
+    // Dark mode state
+    private isDarkMode: boolean = false;
+    
+    /**
+     * Toggle dark mode for the 3D canvas
+     */
+    private toggleDarkMode(button: HTMLElement): void {
+        this.isDarkMode = !this.isDarkMode;
+        this.sceneManager.setDarkMode(this.isDarkMode);
+        
+        // Update button icon
+        button.textContent = this.isDarkMode ? '🌙' : '☀️';
+        button.title = this.isDarkMode ? 'Mode jour' : 'Mode nuit';
+        
+        // Update container class for potential CSS styling
+        const container = document.getElementById('pegboard-3d-container');
+        if (container) {
+            container.classList.toggle('dark-mode', this.isDarkMode);
+        }
     }
 
     /**
