@@ -46,7 +46,7 @@ class Shortcode_Handler {
 			
 			<!-- 3D Scene Area -->
 			<div class="pegboard-scene-wrapper">
-				<!-- Camera controls overlay -->
+				<!-- Camera controls overlay (left) -->
 				<div class="pegboard-scene-controls">
 					<div class="pegboard-camera-controls" id="pegboard-camera-controls">
 						<button class="pegboard-camera-btn" data-preset="front" title="<?php esc_attr_e( 'Vue de face', '3d-pegs' ); ?>">Face</button>
@@ -57,6 +57,22 @@ class Shortcode_Handler {
 						↺ Reset
 					</button>
 				</div>
+
+				<!-- Action controls overlay (right) -->
+				<div class="pegboard-action-controls">
+					<button class="pegboard-action-btn pegboard-delete-btn hidden" id="pegboard-delete-selected" title="<?php esc_attr_e( 'Supprimer la sélection', '3d-pegs' ); ?>">
+						🗑️
+					</button>
+					<div class="pegboard-help-btn-wrapper">
+						<button class="pegboard-action-btn pegboard-help-btn" id="pegboard-help-btn" title="<?php esc_attr_e( 'Aide', '3d-pegs' ); ?>">
+							💡
+						</button>
+						<div class="pegboard-help-tooltip">
+							<p><?php _e( 'Cliquez sur un produit pour l\'ajouter à la scène', '3d-pegs' ); ?></p>
+							<p><?php _e( 'Cliquez sur un objet pour le sélectionner, puis glissez pour le déplacer', '3d-pegs' ); ?></p>
+						</div>
+					</div>
+				</div>
 				
 				<!-- 3D Canvas -->
 				<div id="pegboard-3d-container" class="pegboard-3d-container"></div>
@@ -64,26 +80,28 @@ class Shortcode_Handler {
 			
 			<!-- Sidebar -->
 			<div id="pegboard-sidebar" class="pegboard-sidebar">
-				<div class="pegboard-sidebar-header">
-					<h3><?php _e( 'Configuration', '3d-pegs' ); ?></h3>
-				</div>
+				<div class="pegboard-sidebar-content">
+					<div class="pegboard-sidebar-header">
+						<h3><?php _e( 'Configuration', '3d-pegs' ); ?></h3>
+					</div>
 
-				<div id="pegboard-product-library" class="pegboard-library">
-					<!-- Populated by JS -->
-				</div>
-				
-				<div id="pegboard-price-display" class="pegboard-price">
-					<span class="label"><?php _e( 'Total', '3d-pegs' ); ?></span>
-					<span class="amount">0.00 €</span>
-				</div>
+					<div id="pegboard-product-library" class="pegboard-library">
+						<!-- Populated by JS -->
+					</div>
+					
+					<div id="pegboard-price-display" class="pegboard-price">
+						<span class="label"><?php _e( 'Total', '3d-pegs' ); ?></span>
+						<span class="amount">0.00 €</span>
+					</div>
 
-				<div id="pegboard-item-list" class="pegboard-items"></div>
+					<div id="pegboard-summary" class="pegboard-summary"></div>
 
-				<div class="pegboard-cart-section">
-					<button id="pegboard-add-to-cart" class="button button-primary">
-						<?php _e( 'Ajouter au panier', '3d-pegs' ); ?>
-					</button>
-					<div id="pegboard-cart-spinner" class="spinner hidden"></div>
+					<div class="pegboard-cart-section">
+						<button id="pegboard-add-to-cart" class="button button-primary">
+							<?php _e( 'Ajouter au panier', '3d-pegs' ); ?>
+						</button>
+						<div id="pegboard-cart-spinner" class="spinner hidden"></div>
+					</div>
 				</div>
 			</div>
 

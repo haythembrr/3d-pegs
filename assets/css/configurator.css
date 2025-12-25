@@ -162,6 +162,91 @@
 }
 
 /* ============================================
+   Action Controls - Right side overlay
+   ============================================ */
+.pegboard-action-controls {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.pegboard-action-controls > * {
+    pointer-events: auto;
+}
+
+.pegboard-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 18px;
+    background: var(--pb-surface);
+    border: none;
+    border-radius: var(--pb-radius-sm);
+    cursor: pointer;
+    box-shadow: var(--pb-shadow-md);
+    transition: all 0.15s ease;
+}
+
+.pegboard-action-btn:hover {
+    background: var(--pb-bg);
+    transform: translateY(-1px);
+}
+
+.pegboard-action-btn:active {
+    transform: translateY(0);
+}
+
+.pegboard-delete-btn:hover {
+    background: var(--pb-danger-light);
+}
+
+/* Help button with tooltip */
+.pegboard-help-btn-wrapper {
+    position: relative;
+}
+
+.pegboard-help-tooltip {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 10px);
+    width: 220px;
+    padding: 12px 14px;
+    background: var(--pb-surface);
+    border-radius: var(--pb-radius-sm);
+    box-shadow: var(--pb-shadow-md);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--pb-text);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(10px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.pegboard-help-tooltip p {
+    margin: 0 0 6px 0;
+}
+
+.pegboard-help-tooltip p:last-child {
+    margin-bottom: 0;
+}
+
+.pegboard-help-btn-wrapper:hover .pegboard-help-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+/* ============================================
    Sidebar - Takes ~30% width (max 320px)
    ============================================ */
 .pegboard-sidebar {
@@ -169,10 +254,17 @@
     width: clamp(var(--pb-sidebar-min), var(--pb-sidebar-ratio), var(--pb-sidebar-max));
     max-width: var(--pb-sidebar-max);
     background: var(--pb-surface);
-    display: flex;
-    flex-direction: column;
     border-left: 1px solid var(--pb-border);
     overflow: hidden;
+}
+
+/* Sidebar content - scrollable container */
+.pegboard-sidebar-content {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Sidebar Header */
@@ -196,8 +288,6 @@
     flex-shrink: 0;
     padding: 14px 16px;
     border-bottom: 1px solid var(--pb-border);
-    overflow-y: auto;
-    max-height: 200px;
 }
 
 .pegboard-section-title {
@@ -342,144 +432,70 @@
     letter-spacing: -0.02em;
 }
 
-/* Item List */
-.pegboard-items {
-    flex: 1 1 auto;
-    overflow-y: auto;
+/* Summary */
+.pegboard-summary {
+    flex-shrink: 0;
     padding: 12px 14px;
-    min-height: 80px;
 }
 
-.pegboard-help-hint {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--pb-text-secondary);
-    background: #f0f9ff;
-    padding: 10px 12px;
-    border-radius: var(--pb-radius-sm);
-    margin-bottom: 12px;
-    border-left: 3px solid var(--pb-primary);
+.pegboard-summary:empty {
+    display: none;
 }
 
-.pegboard-item {
+.pegboard-summary-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
     padding: 10px 12px;
     margin-bottom: 6px;
     background: var(--pb-bg);
+    border: 1px solid var(--pb-border);
     border-radius: var(--pb-radius-sm);
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    font-size: 13px;
 }
 
-.pegboard-item:last-child {
+.pegboard-summary-item:last-child {
     margin-bottom: 0;
 }
 
-.pegboard-item:hover {
-    background: #e2e8f0;
-    border-color: var(--pb-border);
-}
-
-.pegboard-item.selected {
-    border-color: var(--pb-primary);
-    background: #dbeafe;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-}
-
-.pegboard-item[data-accessory-id] {
-    background: #f0fdf4;
-}
-
-.pegboard-item[data-accessory-id]:hover {
-    background: #dcfce7;
-}
-
-.pegboard-item[data-accessory-id].selected {
-    border-color: var(--pb-success);
-    background: #bbf7d0;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
-}
-
-.item-info {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.item-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--pb-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.item-price {
-    font-size: 12px;
-    color: var(--pb-text-secondary);
-}
-
-.pegboard-item-actions {
-    display: flex;
-    gap: 2px;
-    flex-shrink: 0;
-    margin-left: 8px;
-}
-
-.pegboard-item-actions button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--pb-text-secondary);
-    transition: all 0.15s ease;
-}
-
-.pegboard-item-actions .select-btn:hover {
-    background: #dbeafe;
+.summary-quantity {
+    font-weight: 600;
     color: var(--pb-primary);
+    min-width: 24px;
 }
 
-.pegboard-item-actions .delete-btn:hover {
-    background: #fee2e2;
-    color: var(--pb-danger);
-}
-
-/* Summary */
-.summary-item {
-    background: var(--pb-surface) !important;
-    border: 1px solid var(--pb-border) !important;
-    cursor: default !important;
-    font-size: 12px;
-}
-
-.summary-item:hover {
-    background: var(--pb-surface) !important;
-}
-
-.summary-item span {
+.summary-name {
     flex: 1;
+    color: var(--pb-text);
+    font-weight: 500;
+}
+
+.summary-colors {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.summary-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+}
+
+.summary-price {
+    font-weight: 600;
+    color: var(--pb-text);
+    white-space: nowrap;
 }
 
 /* Cart Section */
 .pegboard-cart-section {
     flex-shrink: 0;
     padding: 14px 16px;
-    border-top: 1px solid var(--pb-border);
+    margin-top: auto;
     background: var(--pb-surface);
 }
 
@@ -588,16 +604,18 @@
         --pb-sidebar-min: 260px;
     }
     
-    .pegboard-library {
-        max-height: 180px;
-    }
-    
     .pegboard-product-btn {
         padding: 8px 10px;
     }
     
     .pegboard-product-btn .product-name {
         font-size: 12px;
+    }
+    
+    .pegboard-action-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
     }
 }
 
@@ -630,11 +648,36 @@
         top: auto;
         bottom: 12px;
         left: 12px;
-        right: 12px;
+        right: auto;
         flex-direction: row;
-        justify-content: center;
+        justify-content: flex-start;
         align-items: center;
         gap: 10px;
+    }
+
+    /* Action controls - stay at top right on mobile */
+    .pegboard-action-controls {
+        top: 12px;
+        right: 12px;
+        flex-direction: row;
+        gap: 8px;
+    }
+    
+    .pegboard-action-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+    
+    .pegboard-help-tooltip {
+        top: calc(100% + 10px);
+        right: 0;
+        left: auto;
+        transform: translateY(-10px);
+    }
+    
+    .pegboard-help-btn-wrapper:hover .pegboard-help-tooltip {
+        transform: translateY(0);
     }
 
     .pegboard-camera-controls {
@@ -651,7 +694,7 @@
         font-size: 12px;
     }
 
-    /* Sidebar takes remaining space, scrollable */
+    /* Sidebar - single scrollable block */
     .pegboard-sidebar {
         flex: none;
         width: 100%;
@@ -659,16 +702,20 @@
         border-left: none;
         border-top: 1px solid var(--pb-border);
         max-height: 50vh;
-        overflow-y: auto;
     }
 
+    .pegboard-sidebar-content {
+        height: auto;
+        max-height: 50vh;
+    }
+
+    /* All sidebar children should not scroll individually */
     .pegboard-library {
-        max-height: none;
-        overflow-y: visible;
+        overflow: visible;
     }
-
-    .pegboard-items {
-        max-height: 150px;
+    
+    .pegboard-summary {
+        overflow: visible;
     }
     
     .pegboard-price .amount {
@@ -689,8 +736,25 @@
     .pegboard-scene-controls {
         bottom: 8px;
         left: 8px;
+        gap: 6px;
+    }
+    
+    .pegboard-action-controls {
+        top: 8px;
         right: 8px;
         gap: 6px;
+    }
+    
+    .pegboard-action-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .pegboard-help-tooltip {
+        width: 180px;
+        padding: 10px 12px;
+        font-size: 11px;
     }
 
     .pegboard-camera-controls {
@@ -746,6 +810,15 @@
 
     .pegboard-items {
         padding: 10px 12px;
+    }
+    
+    .pegboard-summary {
+        padding: 10px 12px;
+    }
+    
+    .pegboard-summary-item {
+        padding: 8px 10px;
+        font-size: 12px;
     }
 
     .pegboard-cart-section {

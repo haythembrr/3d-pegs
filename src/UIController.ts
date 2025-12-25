@@ -161,6 +161,12 @@ export class UIController {
         if (resetBtn) {
             resetBtn.addEventListener('click', () => this.resetConfiguration());
         }
+
+        // Delete selected button (in scene)
+        const deleteBtn = document.getElementById('pegboard-delete-selected');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => this.deleteSelectedObject());
+        }
     }
 
     /**
@@ -220,16 +226,15 @@ export class UIController {
      * Update color of all placed objects matching a product ID
      */
     private updatePlacedObjectsColor(productId: number, color: string): void {
-        // Update panels
+        // Update panels that match this productId
         const panels = this.multiPanelManager.getAllPanels();
-        const boardProduct = this.products.find(p => p.type === 'pegboard');
-        if (boardProduct && boardProduct.id === productId) {
-            panels.forEach(panel => {
+        panels.forEach(panel => {
+            if (panel.productId === productId) {
                 this.sceneManager.setObjectColor(panel.object, color);
-            });
-        }
+            }
+        });
         
-        // Update accessories
+        // Update accessories that match this productId
         this.placedAccessories.forEach(accessory => {
             if (accessory.productId === productId) {
                 this.sceneManager.setObjectColor(accessory.object, color);
@@ -361,6 +366,25 @@ export class UIController {
         
         return false;
     }
+
+    /**
+     * Check collision for initial accessory placement (before the object exists)
+     * Creates a temporary object to check collision
+     */
+    private async checkInitialPlacementCollision(position: THREE.Vector3): Promise<boolean> {
+        if (!this.pendingProduct) return false;
+        
+        // Load the model to get its actual size
+        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        const tempObject = model.scene.clone();
+        tempObject.position.copy(position);
+        tempObject.updateMatrixWorld(true);
+        
+        // Check collision using the temporary object
+        const hasCollision = this.checkAccessoryCollision(position, tempObject);
+        
+        return hasCollision;
+    }
     
     /**
      * Calculate 2D footprint of an object on the panel surface (XY plane projection)
@@ -481,9 +505,9 @@ export class UIController {
         // If click is inside the 3D container, let handleClick manage selection
         if (container.contains(target)) return;
 
-        // If click is on an item list element (select/delete buttons), don't deselect
-        const itemList = document.getElementById('pegboard-item-list');
-        if (itemList && itemList.contains(target)) return;
+        // If click is inside the sidebar, don't deselect
+        const sidebar = document.getElementById('pegboard-sidebar');
+        if (sidebar && sidebar.contains(target)) return;
 
         // Click is outside - deselect any selected object
         if (this.selectedObject) {
@@ -507,7 +531,7 @@ export class UIController {
     /**
      * Handle click interactions
      */
-    private handleClick(event: MouseEvent): void {
+    private async handleClick(event: MouseEvent): Promise<void> {
         if (this.isDragging) return;
 
         if (this.isPlacingPanel && this.pendingProduct && this.pendingMetadata) {
@@ -521,9 +545,13 @@ export class UIController {
                 const snapPos = this.multiPanelManager.getClosestHole(intersection.point);
                 if (!snapPos) return;
                 
-                // Check collision with a temporary object at snap position
-                const tempBox = new THREE.Box3();
-                tempBox.setFromCenterAndSize(snapPos, new THREE.Vector3(0.02, 0.02, 0.02));
+                // Check collision with existing accessories before placing
+                const hasCollision = await this.checkInitialPlacementCollision(snapPos);
+                if (hasCollision) {
+                    // Don't place if there's a collision
+                    console.warn('Cannot place accessory: collision detected');
+                    return;
+                }
                 
                 // Place accessory directly
                 this.placeAccessoryAt(snapPos);
@@ -548,8 +576,11 @@ export class UIController {
                     }
                 }
                 
-                // First board can be placed anywhere, subsequent boards need snap
-                if (!hasPanels || foundSnap) {
+                // First board is placed at origin (0,0,0), subsequent boards need snap
+                if (!hasPanels) {
+                    bestPos = new THREE.Vector3(0, 0, 0);
+                    this.placeBoardAt(bestPos);
+                } else if (foundSnap) {
                     this.placeBoardAt(bestPos);
                 }
             }
@@ -610,12 +641,12 @@ export class UIController {
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.rotation.x = -Math.PI / 2;
 
+        // Apply color: use selected color, or first available color variant, or default white
         const selectedColor = this.selectedColors.get(productId);
-        if (selectedColor) {
-            this.sceneManager.setObjectColor(scene, selectedColor, 0);
-        }
+        const defaultColor = selectedColor || (this.pendingProduct.color_variants && this.pendingProduct.color_variants[0]) || '#ffffff';
+        this.sceneManager.setObjectColor(scene, defaultColor);
 
-        const panel = this.multiPanelManager.addPanel(scene, this.pendingMetadata, position);
+        const panel = this.multiPanelManager.addPanel(scene, this.pendingMetadata, position, productId);
         this.sceneManager.addObject(panel.object);
         this.priceCalculator.addItem(productId, 1);
 
@@ -637,10 +668,10 @@ export class UIController {
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.position.copy(position);
 
+        // Apply color: use selected color, or first available color variant, or default white
         const selectedColor = this.selectedColors.get(productId);
-        if (selectedColor) {
-            this.sceneManager.setObjectColor(scene, selectedColor, 0);
-        }
+        const defaultColor = selectedColor || (this.pendingProduct.color_variants && this.pendingProduct.color_variants[0]) || '#ffffff';
+        this.sceneManager.setObjectColor(scene, defaultColor);
 
         this.sceneManager.addObject(scene);
 
@@ -874,7 +905,7 @@ export class UIController {
         const delta = intersection.clone().sub(this.dragStartPosition);
 
         if (this.selectedType === 'panel' && this.selectedId) {
-            // For panels, snap to valid positions
+            // For panels, snap to valid positions and check for overlaps
             const panel = this.multiPanelManager.getPanel(this.selectedId);
             if (!panel) return;
 
@@ -906,11 +937,14 @@ export class UIController {
                 foundSnap = true; // Allow placement anywhere if it's the only panel
             }
 
+            // Check if the position would cause an overlap with other panels
+            const wouldOverlap = !this.multiPanelManager.isValidPositionExcluding(bestPos, panel.metadata, this.selectedId);
+            
             // Update position
             this.selectedObject.position.copy(bestPos);
 
-            // Visual feedback
-            this.sceneManager.setDragValid(this.selectedObject, foundSnap);
+            // Visual feedback: valid only if snapped AND no overlap
+            this.sceneManager.setDragValid(this.selectedObject, foundSnap && !wouldOverlap);
 
         } else if (this.selectedType === 'accessory' && this.selectedId) {
             // For accessories, snap to holes and check for collisions
@@ -952,7 +986,22 @@ export class UIController {
 
         if (this.selectedType === 'panel') {
             const movedPanel = this.multiPanelManager.getPanel(this.selectedId);
-            const attachedAccessoryIds = movedPanel ? [...movedPanel.attachedAccessories] : [];
+            if (!movedPanel) {
+                this.cancelDrag();
+                return;
+            }
+            
+            const attachedAccessoryIds = [...movedPanel.attachedAccessories];
+            
+            // Check if the new position would cause an overlap
+            const wouldOverlap = !this.multiPanelManager.isValidPositionExcluding(newPosition, movedPanel.metadata, this.selectedId);
+            
+            // If there are other panels and this position would overlap, cancel the drag
+            const otherPanels = this.multiPanelManager.getAllPanels().filter(p => p.id !== this.selectedId);
+            if (otherPanels.length > 0 && wouldOverlap) {
+                this.cancelDrag();
+                return;
+            }
             
             this.multiPanelManager.updatePanelPosition(this.selectedId, newPosition);
             
@@ -1148,6 +1197,12 @@ export class UIController {
         this.selectedId = id;
         this.sceneManager.highlightObject(obj, true);
 
+        // Show delete button
+        const deleteBtn = document.getElementById('pegboard-delete-selected');
+        if (deleteBtn) {
+            deleteBtn.classList.remove('hidden');
+        }
+
         // Update UI to show selection
         const selector = type === 'panel' ? `[data-panel-id="${id}"]` : `[data-accessory-id="${id}"]`;
         const itemEl = document.querySelector(selector);
@@ -1165,6 +1220,11 @@ export class UIController {
             this.selectedObject = null;
             this.selectedType = null;
             this.selectedId = null;
+        }
+        // Hide delete button
+        const deleteBtn = document.getElementById('pegboard-delete-selected');
+        if (deleteBtn) {
+            deleteBtn.classList.add('hidden');
         }
         // Remove selection highlight from UI
         document.querySelectorAll('.pegboard-item.selected').forEach(el => {
@@ -1245,14 +1305,28 @@ export class UIController {
      */
     private async loadPegboard(product: ProductData): Promise<void> {
         const model = await this.modelLoader.loadModel(product.glb_url);
+        
         // Clone with unique materials to prevent shared material issues
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.rotation.x = -Math.PI / 2;
 
+        // Apply color: use selected color, or first available color variant, or default white
+        const selectedColor = this.selectedColors.get(product.id);
+        const defaultColor = selectedColor || (product.color_variants && product.color_variants[0]) || '#ffffff';
+        
+        if (defaultColor) {
+            this.sceneManager.setObjectColor(scene, defaultColor);
+            // Store as selected if not already set
+            if (!selectedColor && product.color_variants && product.color_variants.length > 0) {
+                this.selectedColors.set(product.id, defaultColor);
+            }
+        }
+
         // Always place first board at origin (0, 0, 0)
         const position = new THREE.Vector3(0, 0, 0);
-        const panel = this.multiPanelManager.addPanel(scene, model.metadata as any, position);
+        const panel = this.multiPanelManager.addPanel(scene, model.metadata as any, position, product.id);
         this.sceneManager.addObject(panel.object);
+        
         this.priceCalculator.addItem(product.id, 1);
         this.updatePriceDisplay();
 
@@ -1280,167 +1354,116 @@ export class UIController {
             priceEl.textContent = `${total.toFixed(2)} €`;
         }
 
-        // Update item list with panel-level details
-        const itemListEl = document.getElementById('pegboard-item-list');
-        if (itemListEl) {
-            const panels = this.multiPanelManager.getAllPanels();
-
-            // Build HTML for panels
-            let html = '';
-
-            // Add help hint if there are items
-            if (panels.length > 0 || this.placedAccessories.size > 0) {
-                html += '<div class="pegboard-help-hint">💡 Cliquez sur un élément pour le sélectionner, puis glissez-le pour le déplacer</div>';
-            }
-
-            if (panels.length > 0) {
-                html += '<div class="pegboard-section-title">Panneaux</div>';
-                panels.forEach(panel => {
-                    const isSelected = this.selectedObject === panel.object;
-                    const product = this.products.find(p => p.type === 'pegboard');
-                    const name = product ? product.name : 'Panneau';
-                    const price = product?.price ?? 0;
-
-                    html += `
-                        <div class="pegboard-item ${isSelected ? 'selected' : ''}" data-panel-id="${panel.id}">
-                            <span class="item-info">
-                                <span class="item-name">${name}</span>
-                                <span class="item-price">${price.toFixed(2)} €</span>
-                            </span>
-                            <div class="pegboard-item-actions">
-                                <button class="select-btn" data-action="select" data-panel-id="${panel.id}" title="Sélectionner">⊙</button>
-                                <button class="delete-btn" data-action="delete" data-panel-id="${panel.id}" title="Supprimer">×</button>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            // Show accessories
-            if (this.placedAccessories.size > 0) {
-                html += '<div class="pegboard-section-title">Accessoires</div>';
-                this.placedAccessories.forEach((accessory, id) => {
-                    const isSelected = this.selectedObject === accessory.object;
-                    const product = this.products.find(p => p.id === accessory.productId);
-                    const name = product ? product.name : 'Accessoire';
-                    const price = product?.price ?? 0;
-
-                    html += `
-                        <div class="pegboard-item ${isSelected ? 'selected' : ''}" data-accessory-id="${id}">
-                            <span class="item-info">
-                                <span class="item-name">${name}</span>
-                                <span class="item-price">${price.toFixed(2)} €</span>
-                            </span>
-                            <div class="pegboard-item-actions">
-                                <button class="select-btn" data-action="select" data-accessory-id="${id}" title="Sélectionner">⊙</button>
-                                <button class="delete-btn" data-action="delete" data-accessory-id="${id}" title="Supprimer">×</button>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            // Also show summary from price calculator
-            const items = this.priceCalculator.getItemizedList();
-            if (items.length > 0) {
-                html += '<div class="pegboard-section-title" style="margin-top:10px;">Résumé</div>';
-                items.forEach(item => {
-                    html += `
-                        <div class="pegboard-item summary-item">
-                            <span>${item.name}</span>
-                            <span>×${item.quantity}</span>
-                            <span>${item.subtotal.toFixed(2)} €</span>
-                        </div>
-                    `;
-                });
-            }
-
-            itemListEl.innerHTML = html;
-
-            // Add event listeners for select/delete buttons
-            this.setupItemListListeners(itemListEl);
-        }
+        // Update summary section with grouped items and colors
+        this.updateSummarySection();
     }
 
     /**
-     * Setup event listeners for item list buttons
+     * Update summary section with grouped items and color dots
      */
-    private setupItemListListeners(container: HTMLElement): void {
-        // Select buttons for panels
-        container.querySelectorAll('[data-action="select"][data-panel-id]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const panelId = (btn as HTMLElement).dataset.panelId;
-                if (panelId) {
-                    const panel = this.multiPanelManager.getPanel(panelId);
-                    if (panel) {
-                        this.selectObject(panel.object, panel.id, 'panel');
-                    }
-                }
-            });
+    private updateSummarySection(): void {
+        const summaryEl = document.getElementById('pegboard-summary');
+        if (!summaryEl) return;
+
+        // Group items by product ID and collect colors
+        const groupedItems: Map<number, { 
+            product: ProductData; 
+            quantity: number; 
+            colors: Set<string>;
+            subtotal: number;
+        }> = new Map();
+
+        // Count panels
+        const panels = this.multiPanelManager.getAllPanels();
+        panels.forEach(panel => {
+            const product = this.products.find(p => p.id === panel.productId);
+            if (!product) return;
+
+            const existing = groupedItems.get(panel.productId);
+            const color = this.getObjectColor(panel.object);
+            
+            if (existing) {
+                existing.quantity++;
+                existing.subtotal += product.price ?? 0;
+                if (color) existing.colors.add(color);
+            } else {
+                const colors = new Set<string>();
+                if (color) colors.add(color);
+                groupedItems.set(panel.productId, {
+                    product,
+                    quantity: 1,
+                    colors,
+                    subtotal: product.price ?? 0
+                });
+            }
         });
 
-        // Delete buttons for panels
-        container.querySelectorAll('[data-action="delete"][data-panel-id]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const panelId = (btn as HTMLElement).dataset.panelId;
-                if (panelId) {
-                    this.deletePanelById(panelId);
-                }
-            });
+        // Count accessories
+        this.placedAccessories.forEach(accessory => {
+            const product = this.products.find(p => p.id === accessory.productId);
+            if (!product) return;
+
+            const existing = groupedItems.get(accessory.productId);
+            const color = this.getObjectColor(accessory.object);
+            
+            if (existing) {
+                existing.quantity++;
+                existing.subtotal += product.price ?? 0;
+                if (color) existing.colors.add(color);
+            } else {
+                const colors = new Set<string>();
+                if (color) colors.add(color);
+                groupedItems.set(accessory.productId, {
+                    product,
+                    quantity: 1,
+                    colors,
+                    subtotal: product.price ?? 0
+                });
+            }
         });
 
-        // Select buttons for accessories
-        container.querySelectorAll('[data-action="select"][data-accessory-id]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const accessoryId = (btn as HTMLElement).dataset.accessoryId;
-                if (accessoryId) {
-                    const accessory = this.placedAccessories.get(accessoryId);
-                    if (accessory) {
-                        this.selectObject(accessory.object, accessoryId, 'accessory');
-                    }
-                }
-            });
+        // Build summary HTML
+        if (groupedItems.size === 0) {
+            summaryEl.innerHTML = '';
+            return;
+        }
+
+        let html = '<div class="pegboard-section-title">Résumé</div>';
+        
+        groupedItems.forEach(item => {
+            const colorDots = Array.from(item.colors)
+                .map(color => `<span class="summary-color-dot" style="background-color: ${color};"></span>`)
+                .join('');
+
+            html += `
+                <div class="pegboard-summary-item">
+                    <span class="summary-quantity">${item.quantity}×</span>
+                    <span class="summary-name">${item.product.name}</span>
+                    <span class="summary-colors">${colorDots}</span>
+                    <span class="summary-price">${item.subtotal.toFixed(2)} €</span>
+                </div>
+            `;
         });
 
-        // Delete buttons for accessories
-        container.querySelectorAll('[data-action="delete"][data-accessory-id]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const accessoryId = (btn as HTMLElement).dataset.accessoryId;
-                if (accessoryId) {
-                    this.deleteAccessoryById(accessoryId);
-                }
-            });
-        });
+        summaryEl.innerHTML = html;
+    }
 
-        // Clicking the panel item row itself selects it
-        container.querySelectorAll('.pegboard-item[data-panel-id]').forEach(item => {
-            item.addEventListener('click', () => {
-                const panelId = (item as HTMLElement).dataset.panelId;
-                if (panelId) {
-                    const panel = this.multiPanelManager.getPanel(panelId);
-                    if (panel) {
-                        this.selectObject(panel.object, panel.id, 'panel');
-                    }
+    /**
+     * Get the current color of an object (from its material)
+     */
+    private getObjectColor(object: THREE.Object3D): string | null {
+        let color: string | null = null;
+        
+        object.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material && !color) {
+                const material = child.material as THREE.MeshStandardMaterial;
+                if (material.color) {
+                    color = '#' + material.color.getHexString();
                 }
-            });
+            }
         });
-
-        // Clicking the accessory item row itself selects it
-        container.querySelectorAll('.pegboard-item[data-accessory-id]').forEach(item => {
-            item.addEventListener('click', () => {
-                const accessoryId = (item as HTMLElement).dataset.accessoryId;
-                if (accessoryId) {
-                    const accessory = this.placedAccessories.get(accessoryId);
-                    if (accessory) {
-                        this.selectObject(accessory.object, accessoryId, 'accessory');
-                    }
-                }
-            });
-        });
+        
+        return color;
     }
 
     /**

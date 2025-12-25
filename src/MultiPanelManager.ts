@@ -12,6 +12,7 @@ export interface Panel {
     position: THREE.Vector3;
     gridOffset: THREE.Vector2;
     attachedAccessories: string[]; // IDs of accessories on this panel
+    productId: number; // Product ID for color tracking
 }
 
 /**
@@ -41,7 +42,8 @@ export class MultiPanelManager {
     public addPanel(
         pegboard: THREE.Object3D,
         metadata: PegboardMetadata,
-        position?: THREE.Vector3
+        position?: THREE.Vector3,
+        productId: number = 0
     ): Panel {
         const id = `panel_${this.nextPanelId++}`;
 
@@ -55,7 +57,8 @@ export class MultiPanelManager {
             metadata,
             position: finalPosition,
             gridOffset: new THREE.Vector2(0, 0), // Will be calculated
-            attachedAccessories: []
+            attachedAccessories: [],
+            productId
         };
 
         this.panels.set(id, panel);
@@ -375,7 +378,7 @@ export class MultiPanelManager {
      * Check if a position is valid, excluding a specific panel (for dragging)
      * Panel extends RIGHT (positive X) and DOWN (negative Y) from position
      */
-    private isValidPositionExcluding(position: THREE.Vector3, metadata: PegboardMetadata, excludePanelId: string): boolean {
+    public isValidPositionExcluding(position: THREE.Vector3, metadata: PegboardMetadata, excludePanelId: string): boolean {
         const newWidth = (metadata.panel_width_cm * 10) / 1000;
         const newHeight = (metadata.panel_height_cm * 10) / 1000;
         const epsilon = 0.001;

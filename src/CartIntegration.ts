@@ -67,13 +67,23 @@ export class CartIntegration {
             };
         }
 
+        if (items.length === 0) {
+            return {
+                success: false,
+                message: 'Aucun article à ajouter'
+            };
+        }
+
         this.showLoadingState();
 
         try {
-            // Add items one by one (WooCommerce Store API limitation)
-            for (const item of items) {
-                await this.addSingleItem(item);
-            }
+            // Group items by productId to reduce API calls
+            const groupedItems = this.groupItemsByProduct(items);
+            
+            // Add items in parallel (WooCommerce handles concurrent requests)
+            await Promise.all(
+                groupedItems.map(item => this.addSingleItem(item))
+            );
 
             this.hideLoadingState();
             return this.handleSuccess();
@@ -81,6 +91,26 @@ export class CartIntegration {
             this.hideLoadingState();
             return this.handleError(error as Error);
         }
+    }
+
+    /**
+     * Group items by product ID to reduce API calls
+     */
+    private groupItemsByProduct(items: SceneItem[]): SceneItem[] {
+        const grouped = new Map<string, SceneItem>();
+        
+        for (const item of items) {
+            const key = `${item.productId}-${item.variationId || 0}`;
+            const existing = grouped.get(key);
+            
+            if (existing) {
+                existing.quantity += item.quantity;
+            } else {
+                grouped.set(key, { ...item });
+            }
+        }
+        
+        return Array.from(grouped.values());
     }
 
     /**
@@ -163,17 +193,14 @@ export class CartIntegration {
     public handleSuccess(): CartResponse {
         // Update mini-cart if available
         if (typeof (window as any).wc_fragments !== 'undefined') {
-            // Trigger WooCommerce fragments refresh
             document.body.dispatchEvent(new Event('wc_fragment_refresh'));
         }
 
-        // Show success message briefly then redirect
-        this.showMessage('Configuration ajoutée au panier ! Redirection...', 'success');
+        // Show success message and redirect immediately
+        this.showMessage('Configuration ajoutée au panier !', 'success');
 
-        // Redirect to cart page after a short delay
-        setTimeout(() => {
-            window.location.href = this.cartPageUrl;
-        }, 500);
+        // Redirect to cart page immediately
+        window.location.href = this.cartPageUrl;
 
         return {
             success: true,

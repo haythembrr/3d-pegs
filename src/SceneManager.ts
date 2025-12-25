@@ -17,7 +17,7 @@ export class SceneManager {
 
         // Initialize scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xf0f0f0);
+        this.scene.background = new THREE.Color(0xf5f5f5); // Slightly lighter background
 
         // Initialize camera
         const aspect = container.clientWidth / container.clientHeight;
@@ -56,14 +56,28 @@ export class SceneManager {
      * Setup scene lighting
      */
     private setupLighting(): void {
-        // Ambient light for general illumination
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // Ambient light for general illumination - brighter for better visibility
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
         this.scene.add(ambientLight);
 
-        // Directional light for shadows and depth
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(5, 10, 7.5);
-        this.scene.add(directionalLight);
+        // Main directional light from front-top-right
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(5, 10, 10);
+        this.scene.add(mainLight);
+
+        // Fill light from front-left to reduce shadows
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        fillLight.position.set(-5, 5, 8);
+        this.scene.add(fillLight);
+
+        // Back light for depth and rim lighting
+        const backLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        backLight.position.set(0, 5, -5);
+        this.scene.add(backLight);
+
+        // Hemisphere light for natural sky/ground lighting
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe0e0e0, 0.5);
+        this.scene.add(hemiLight);
     }
 
     /**
@@ -389,63 +403,36 @@ export class SceneManager {
     }
 
     /**
-     * Change the color of an object's materials with smooth transition
+     * Change the color of an object's materials
+     * Replaces materials with MeshStandardMaterial using the target color
      * @param obj The 3D object to recolor
      * @param hexColor The target color in hex format (e.g., '#ff0000')
-     * @param duration Animation duration in ms (default 300ms)
      */
-    public setObjectColor(obj: THREE.Object3D, hexColor: string, duration: number = 300): void {
+    public setObjectColor(obj: THREE.Object3D, hexColor: string): void {
         const targetColor = new THREE.Color(hexColor);
-
-        // Collect all materials
-        const materialData: { material: THREE.MeshStandardMaterial; startColor: THREE.Color }[] = [];
 
         obj.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach((mat) => {
-                    if (mat instanceof THREE.MeshStandardMaterial && mat.color) {
-                        materialData.push({
-                            material: mat,
-                            startColor: mat.color.clone()
-                        });
-                    }
+
+                const newMaterials = materials.map(() => {
+                    // Create a new MeshStandardMaterial with the target color
+                    const newMat = new THREE.MeshStandardMaterial({
+                        color: targetColor,
+                        roughness: 0.4,
+                        metalness: 0.05,
+                    });
+                    return newMat;
                 });
+
+                // Apply the new materials
+                if (Array.isArray(child.material)) {
+                    child.material = newMaterials;
+                } else {
+                    child.material = newMaterials[0];
+                }
             }
         });
-
-        if (materialData.length === 0) return;
-
-        // If duration is 0 or very small, apply instantly
-        if (duration <= 0) {
-            materialData.forEach(({ material }) => {
-                material.color.copy(targetColor);
-                material.needsUpdate = true;
-            });
-            return;
-        }
-
-        const startTime = performance.now();
-
-        // Animate color transition
-        const animate = () => {
-            const elapsed = performance.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-
-            // Smooth easing
-            const eased = 1 - Math.pow(1 - progress, 3);
-            
-            materialData.forEach(({ material, startColor }) => {
-                material.color.lerpColors(startColor, targetColor, eased);
-                material.needsUpdate = true;
-            });
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
-        
-        animate();
     }
 
     /**
