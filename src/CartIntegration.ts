@@ -80,13 +80,37 @@ export class CartIntegration {
             // Group items by productId to reduce API calls
             const groupedItems = this.groupItemsByProduct(items);
             
-            // Add items in parallel (WooCommerce handles concurrent requests)
-            await Promise.all(
-                groupedItems.map(item => this.addSingleItem(item))
-            );
+            console.log('[addToCart] Adding items sequentially:', groupedItems);
+            
+            // Add items sequentially to avoid race conditions with WooCommerce cart
+            const errors: string[] = [];
+            let successCount = 0;
+            
+            for (const item of groupedItems) {
+                try {
+                    await this.addSingleItem(item);
+                    successCount++;
+                    console.log('[addToCart] Successfully added item:', item);
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                    console.error('[addToCart] Failed to add item:', item, errorMsg);
+                    errors.push(`Product ${item.productId}: ${errorMsg}`);
+                }
+            }
 
             this.hideLoadingState();
-            return this.handleSuccess();
+            
+            if (successCount === 0) {
+                // All items failed
+                return this.handleError(new Error(errors.join('; ')));
+            } else if (errors.length > 0) {
+                // Some items failed - still redirect but log warnings
+                console.warn('[addToCart] Some items failed:', errors);
+                return this.handleSuccess();
+            } else {
+                // All items succeeded
+                return this.handleSuccess();
+            }
         } catch (error) {
             this.hideLoadingState();
             return this.handleError(error as Error);
@@ -100,7 +124,11 @@ export class CartIntegration {
         const grouped = new Map<string, SceneItem>();
         
         for (const item of items) {
-            const key = `${item.productId}-${item.variationId || 0}`;
+            // Include variation attributes in the key to properly group items with same variation
+            const attrKey = item.variationAttributes 
+                ? JSON.stringify(item.variationAttributes.sort((a, b) => a.attribute.localeCompare(b.attribute)))
+                : '';
+            const key = `${item.productId}-${item.variationId || 0}-${attrKey}`;
             const existing = grouped.get(key);
             
             if (existing) {
@@ -117,14 +145,27 @@ export class CartIntegration {
      * Add a single item to cart
      */
     private async addSingleItem(item: SceneItem): Promise<void> {
+        // For variable products with a variation, use the variation ID as the main ID
+        // The WooCommerce Store API expects the variation ID, not the parent product ID
+        const productId = item.variationId || item.productId;
+        
+        console.log('[addSingleItem] Adding item:', { 
+            originalProductId: item.productId, 
+            variationId: item.variationId, 
+            variationAttributes: item.variationAttributes,
+            usingId: productId, 
+            quantity: item.quantity 
+        });
+        
         const body: Record<string, unknown> = {
-            id: item.productId,
+            id: productId,
             quantity: item.quantity
         };
 
-        // For variable products, use variation_id directly
-        if (item.variationId) {
-            body.variation_id = item.variationId;
+        // Add variation attributes if this is a variable product
+        // WooCommerce Store API requires these for variable products
+        if (item.variationId && item.variationAttributes && item.variationAttributes.length > 0) {
+            body.variation = item.variationAttributes;
         }
 
         const headers: Record<string, string> = {
@@ -137,6 +178,8 @@ export class CartIntegration {
             headers['X-WC-Store-API-Nonce'] = this.nonce;
         }
 
+        console.log('[addSingleItem] Request body:', body);
+
         const response = await fetch(this.apiUrl, {
             method: 'POST',
             headers,
@@ -146,6 +189,7 @@ export class CartIntegration {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
+            console.error('[addSingleItem] Error response:', errorData);
             const errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
             throw new Error(errorMessage);
         }

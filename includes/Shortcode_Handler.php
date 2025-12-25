@@ -228,6 +228,7 @@ class Shortcode_Handler {
 				'price' => $price,
 				'glb_url' => $config['glb_url'],
 				'color_variants' => $config['color_variants'],
+				'color_variation_map' => $config['color_variation_map'],
 				'metadata' => $config
 			);
 		}
@@ -253,6 +254,7 @@ class Shortcode_Handler {
 				'price' => $price,
 				'glb_url' => $config['glb_url'],
 				'color_variants' => $config['color_variants'],
+				'color_variation_map' => $config['color_variation_map'],
 				'metadata' => $config
 			);
 		}

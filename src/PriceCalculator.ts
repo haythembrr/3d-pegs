@@ -1,4 +1,4 @@
-import type { ProductData } from './types';
+import type { ProductData, VariationAttribute } from './types';
 
 /**
  * Scene item for price calculation
@@ -7,6 +7,7 @@ export interface SceneItem {
     productId: number;
     quantity: number;
     variationId?: number;
+    variationAttributes?: VariationAttribute[];
 }
 
 /**

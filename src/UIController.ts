@@ -15,6 +15,7 @@ interface PlacedAccessory {
     productId: number;
     panelId: string | null;
     boundingBox: THREE.Box3; // For collision detection
+    color: string; // Current color hex
 }
 
 /**
@@ -33,6 +34,9 @@ export class UIController {
     private placedAccessories: Map<string, PlacedAccessory> = new Map();
     private nextAccessoryId: number = 1;
 
+    // Placed panels color tracking (panelId -> color)
+    private panelColors: Map<string, string> = new Map();
+
     // Placement State
     private isPlacingPanel: boolean = false;
     private pendingProduct: ProductData | null = null;
@@ -47,8 +51,11 @@ export class UIController {
     private dragStartPosition: THREE.Vector3 | null = null;
     private dragOriginalPosition: THREE.Vector3 | null = null;
 
-    // Color variants tracking
+    // Color variants tracking (default colors per product type)
     private selectedColors: Map<number, string> = new Map();
+    
+    // Currently active product for placement
+    private activeProductId: number | null = null;
 
     constructor(containerId: string, config: any) {
         const container = document.getElementById(containerId);
@@ -127,6 +134,20 @@ export class UIController {
                     this.handleProductSelect(id, type);
                 }
             });
+            
+            // Add hover listener for insertion mode highlighting
+            btn.addEventListener('mouseenter', () => {
+                if (this.isPlacingPanel && this.pendingProduct) {
+                    const id = parseInt((btn as HTMLElement).dataset.id || '0');
+                    if (id === this.pendingProduct.id) {
+                        btn.classList.add('hover-during-placement');
+                    }
+                }
+            });
+            
+            btn.addEventListener('mouseleave', () => {
+                btn.classList.remove('hover-during-placement');
+            });
         });
 
         // Add click listeners for color dots
@@ -141,6 +162,9 @@ export class UIController {
                 }
             });
         });
+        
+        // Initialize default color highlights for all products with color variants
+        this.initializeDefaultColorHighlights();
 
         // Camera controls are now in the HTML template, bind them here
         const cameraControls = document.getElementById('pegboard-camera-controls');
@@ -207,15 +231,8 @@ export class UIController {
     /**
      * Handle color selection for a product
      */
-    private handleColorSelect(productId: number, color: string, dotElement: HTMLElement): void {
-        // Update active state on dots
-        const parentBtn = dotElement.closest('.pegboard-product-btn');
-        if (parentBtn) {
-            parentBtn.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
-            dotElement.classList.add('active');
-        }
-        
-        // Store selected color for this product (for new placements)
+    private handleColorSelect(productId: number, color: string, _dotElement: HTMLElement): void {
+        // Always store selected color as the default for this product type (for new placements)
         this.selectedColors.set(productId, color);
         
         // Check if we have a selected accessory of this product type
@@ -224,6 +241,9 @@ export class UIController {
             if (selectedAccessory && selectedAccessory.productId === productId) {
                 // Only change the selected accessory's color
                 this.sceneManager.setObjectColor(selectedAccessory.object, color);
+                selectedAccessory.color = color;
+                // Update the color dot highlight to show the selected accessory's color
+                this.updateColorDotHighlight(productId, color);
                 this.updateSummarySection();
                 return;
             }
@@ -235,36 +255,66 @@ export class UIController {
             if (selectedPanel && selectedPanel.productId === productId) {
                 // Only change the selected panel's color
                 this.sceneManager.setObjectColor(selectedPanel.object, color);
+                this.panelColors.set(this.selectedId, color);
+                // Update the color dot highlight to show the selected panel's color
+                this.updateColorDotHighlight(productId, color);
                 this.updateSummarySection();
                 return;
             }
         }
         
-        // No matching selection - update all placed objects of this product type
-        this.updatePlacedObjectsColor(productId, color);
+        // No matching selection - just update the default color highlight
+        // This sets the default for future placements without changing existing objects
+        this.updateColorDotHighlight(productId, color);
     }
-
+    
     /**
-     * Update color of all placed objects matching a product ID
+     * Initialize default color highlights for all products with color variants
      */
-    private updatePlacedObjectsColor(productId: number, color: string): void {
-        // Update panels that match this productId
-        const panels = this.multiPanelManager.getAllPanels();
-        panels.forEach(panel => {
-            if (panel.productId === productId) {
-                this.sceneManager.setObjectColor(panel.object, color);
+    private initializeDefaultColorHighlights(): void {
+        this.products.forEach(product => {
+            if (product.color_variants && product.color_variants.length > 0) {
+                // Set first color as default if not already set
+                if (!this.selectedColors.has(product.id)) {
+                    this.selectedColors.set(product.id, product.color_variants[0]);
+                }
+                // Highlight the default color dot
+                const defaultColor = this.selectedColors.get(product.id);
+                if (defaultColor) {
+                    this.updateColorDotHighlight(product.id, defaultColor);
+                }
             }
         });
-        
-        // Update accessories that match this productId
-        this.placedAccessories.forEach(accessory => {
-            if (accessory.productId === productId) {
-                this.sceneManager.setObjectColor(accessory.object, color);
+    }
+    
+    /**
+     * Update color dot highlight for a specific product
+     */
+    private updateColorDotHighlight(productId: number, color: string): void {
+        const productBtn = document.querySelector(`.pegboard-product-btn[data-id="${productId}"]`);
+        if (productBtn) {
+            // Remove active from all dots in this product
+            productBtn.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            // Add active to the matching color dot
+            const matchingDot = productBtn.querySelector(`.color-dot[data-color="${color}"]`);
+            if (matchingDot) {
+                matchingDot.classList.add('active');
             }
-        });
-        
-        // Update summary to reflect new colors
-        this.updateSummarySection();
+        }
+    }
+    
+    /**
+     * Highlight or unhighlight a product button
+     */
+    private highlightProductButton(productId: number, highlight: boolean): void {
+        const productBtn = document.querySelector(`.pegboard-product-btn[data-id="${productId}"]`);
+        if (productBtn) {
+            if (highlight) {
+                productBtn.classList.add('active');
+            } else {
+                productBtn.classList.remove('active');
+            }
+        }
     }
 
     /**
@@ -308,6 +358,10 @@ export class UIController {
         this.placementType = 'accessory';
         this.pendingProduct = product;
         this.pendingMetadata = model.metadata;
+        this.activeProductId = product.id;
+        
+        // Highlight the product button during placement
+        this.highlightProductButton(product.id, true);
 
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
@@ -328,6 +382,10 @@ export class UIController {
         this.placementType = 'board';
         this.pendingProduct = product;
         this.pendingMetadata = model.metadata;
+        this.activeProductId = product.id;
+        
+        // Highlight the product button during placement
+        this.highlightProductButton(product.id, true);
 
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
@@ -339,9 +397,15 @@ export class UIController {
      * Cancel placement mode
      */
     private cancelPlacement(): void {
+        // Remove product button highlight
+        if (this.activeProductId !== null) {
+            this.highlightProductButton(this.activeProductId, false);
+        }
+        
         this.isPlacingPanel = false;
         this.pendingProduct = null;
         this.pendingMetadata = null;
+        this.activeProductId = null;
 
         // Remove placing class from container
         const container = document.getElementById('pegboard-3d-container');
@@ -355,6 +419,11 @@ export class UIController {
         // Also blur any focused product button
         document.querySelectorAll('.pegboard-product-btn').forEach((btn) => {
             (btn as HTMLElement).blur();
+        });
+        
+        // Remove hover-during-placement class from all buttons
+        document.querySelectorAll('.pegboard-product-btn.hover-during-placement').forEach((btn) => {
+            btn.classList.remove('hover-during-placement');
         });
     }
 
@@ -673,6 +742,10 @@ export class UIController {
 
         const panel = this.multiPanelManager.addPanel(scene, this.pendingMetadata, position, productId);
         this.sceneManager.addObject(panel.object);
+        
+        // Track the panel's color
+        this.panelColors.set(panel.id, defaultColor);
+        
         this.priceCalculator.addItem(productId, 1);
 
         const allPanels = this.multiPanelManager.getAllPanels().map(p => p.object);
@@ -709,7 +782,8 @@ export class UIController {
             object: scene,
             productId: productId,
             panelId: panel ? panel.id : null,
-            boundingBox: boundingBox
+            boundingBox: boundingBox,
+            color: defaultColor
         };
         this.placedAccessories.set(accessoryId, placedAccessory);
 
@@ -1234,6 +1308,31 @@ export class UIController {
         if (itemEl) {
             itemEl.classList.add('selected');
         }
+        
+        // Highlight the corresponding product button
+        let productId: number | null = null;
+        if (type === 'accessory') {
+            const accessory = this.placedAccessories.get(id);
+            if (accessory) {
+                productId = accessory.productId;
+                // Update color dot to show the selected accessory's color
+                this.updateColorDotHighlight(productId, accessory.color);
+            }
+        } else if (type === 'panel') {
+            const panel = this.multiPanelManager.getPanel(id);
+            if (panel) {
+                productId = panel.productId;
+                // Update color dot to show the selected panel's color
+                const panelColor = this.panelColors.get(id);
+                if (panelColor) {
+                    this.updateColorDotHighlight(productId, panelColor);
+                }
+            }
+        }
+        
+        if (productId !== null) {
+            this.highlightProductButton(productId, true);
+        }
     }
 
     /**
@@ -1241,7 +1340,35 @@ export class UIController {
      */
     private deselectObject(): void {
         if (this.selectedObject) {
+            // Get the product ID before clearing selection to restore default color highlight
+            let productId: number | null = null;
+            if (this.selectedType === 'accessory' && this.selectedId) {
+                const accessory = this.placedAccessories.get(this.selectedId);
+                if (accessory) {
+                    productId = accessory.productId;
+                }
+            } else if (this.selectedType === 'panel' && this.selectedId) {
+                const panel = this.multiPanelManager.getPanel(this.selectedId);
+                if (panel) {
+                    productId = panel.productId;
+                }
+            }
+            
             this.sceneManager.highlightObject(this.selectedObject, false);
+            
+            // Remove product button highlight (unless we're in placement mode for that product)
+            if (productId !== null && this.activeProductId !== productId) {
+                this.highlightProductButton(productId, false);
+            }
+            
+            // Restore default color highlight for this product type
+            if (productId !== null) {
+                const defaultColor = this.selectedColors.get(productId);
+                if (defaultColor) {
+                    this.updateColorDotHighlight(productId, defaultColor);
+                }
+            }
+            
             this.selectedObject = null;
             this.selectedType = null;
             this.selectedId = null;
@@ -1351,6 +1478,9 @@ export class UIController {
         const position = new THREE.Vector3(0, 0, 0);
         const panel = this.multiPanelManager.addPanel(scene, model.metadata as any, position, product.id);
         this.sceneManager.addObject(panel.object);
+        
+        // Track the panel's color
+        this.panelColors.set(panel.id, defaultColor);
         
         this.priceCalculator.addItem(product.id, 1);
         this.updatePriceDisplay();
@@ -1569,10 +1699,81 @@ export class UIController {
     }
 
     /**
+     * Build cart items with variation IDs based on colors
+     */
+    private buildCartItems(): { productId: number; quantity: number; variationId?: number; variationAttributes?: { attribute: string; value: string }[] }[] {
+        const items: { productId: number; quantity: number; variationId?: number; variationAttributes?: { attribute: string; value: string }[] }[] = [];
+        
+        // Add panels with their colors
+        const panels = this.multiPanelManager.getAllPanels();
+        panels.forEach(panel => {
+            const product = this.products.find(p => p.id === panel.productId);
+            const color = this.panelColors.get(panel.id);
+            let variationId: number | undefined;
+            let variationAttributes: { attribute: string; value: string }[] | undefined;
+            
+            if (product && color && product.color_variation_map) {
+                // color_variation_map now contains { id, attributes } objects
+                const variationData = product.color_variation_map[color] || product.color_variation_map[color.toLowerCase()];
+                if (variationData) {
+                    // Handle both old format (number) and new format ({ id, attributes })
+                    if (typeof variationData === 'number') {
+                        variationId = variationData;
+                    } else {
+                        variationId = variationData.id;
+                        variationAttributes = variationData.attributes;
+                    }
+                }
+                console.log('[buildCartItems] Panel color:', color, 'map:', product.color_variation_map, 'variationId:', variationId, 'attributes:', variationAttributes);
+            }
+            
+            items.push({
+                productId: panel.productId,
+                quantity: 1,
+                variationId,
+                variationAttributes
+            });
+        });
+        
+        // Add accessories with their colors
+        this.placedAccessories.forEach(accessory => {
+            const product = this.products.find(p => p.id === accessory.productId);
+            let variationId: number | undefined;
+            let variationAttributes: { attribute: string; value: string }[] | undefined;
+            
+            if (product && accessory.color && product.color_variation_map) {
+                // color_variation_map now contains { id, attributes } objects
+                const variationData = product.color_variation_map[accessory.color] || product.color_variation_map[accessory.color.toLowerCase()];
+                if (variationData) {
+                    // Handle both old format (number) and new format ({ id, attributes })
+                    if (typeof variationData === 'number') {
+                        variationId = variationData;
+                    } else {
+                        variationId = variationData.id;
+                        variationAttributes = variationData.attributes;
+                    }
+                }
+                console.log('[buildCartItems] Accessory color:', accessory.color, 'map:', product.color_variation_map, 'variationId:', variationId, 'attributes:', variationAttributes);
+            }
+            
+            items.push({
+                productId: accessory.productId,
+                quantity: 1,
+                variationId,
+                variationAttributes
+            });
+        });
+        
+        console.log('[buildCartItems] Final items:', items);
+        return items;
+    }
+
+    /**
      * Handle add to cart
      */
     private async handleAddToCart(): Promise<void> {
-        const items = this.priceCalculator.getSceneItems();
+        const items = this.buildCartItems();
+        console.log('[handleAddToCart] Items to add:', items);
 
         if (items.length === 0) {
             alert('Veuillez ajouter des éléments à votre configuration');

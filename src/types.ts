@@ -34,6 +34,22 @@ export interface LoadedModel {
 }
 
 /**
+ * Variation attribute for WooCommerce Store API
+ */
+export interface VariationAttribute {
+    attribute: string;
+    value: string;
+}
+
+/**
+ * Variation data including ID and attributes
+ */
+export interface VariationData {
+    id: number;
+    attributes: VariationAttribute[];
+}
+
+/**
  * Product data from WooCommerce/WordPress
  */
 export interface ProductData {
@@ -43,5 +59,6 @@ export interface ProductData {
     glb_url: string;
     price?: number;
     color_variants?: string[]; // Array of hex colors like ['#1a1a2e', '#16213e']
+    color_variation_map?: Record<string, VariationData>; // Maps hex color to WooCommerce variation data (ID + attributes)
     [key: string]: any;
 }
