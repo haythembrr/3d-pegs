@@ -18974,7 +18974,21 @@ class d_ {
    */
   handleColorSelect(e, t, n) {
     const i = n.closest(".pegboard-product-btn");
-    i && (i.querySelectorAll(".color-dot").forEach((s) => s.classList.remove("active")), n.classList.add("active")), this.selectedColors.set(e, t), this.updatePlacedObjectsColor(e, t);
+    if (i && (i.querySelectorAll(".color-dot").forEach((s) => s.classList.remove("active")), n.classList.add("active")), this.selectedColors.set(e, t), this.selectedObject && this.selectedType === "accessory" && this.selectedId) {
+      const s = this.placedAccessories.get(this.selectedId);
+      if (s && s.productId === e) {
+        this.sceneManager.setObjectColor(s.object, t), this.updateSummarySection();
+        return;
+      }
+    }
+    if (this.selectedObject && this.selectedType === "panel" && this.selectedId) {
+      const s = this.multiPanelManager.getPanel(this.selectedId);
+      if (s && s.productId === e) {
+        this.sceneManager.setObjectColor(s.object, t), this.updateSummarySection();
+        return;
+      }
+    }
+    this.updatePlacedObjectsColor(e, t);
   }
   /**
    * Update color of all placed objects matching a product ID
@@ -18984,7 +18998,7 @@ class d_ {
       i.productId === e && this.sceneManager.setObjectColor(i.object, t);
     }), this.placedAccessories.forEach((i) => {
       i.productId === e && this.sceneManager.setObjectColor(i.object, t);
-    });
+    }), this.updateSummarySection();
   }
   /**
    * Handle product selection

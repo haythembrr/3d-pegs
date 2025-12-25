@@ -215,10 +215,32 @@ export class UIController {
             dotElement.classList.add('active');
         }
         
-        // Store selected color for this product
+        // Store selected color for this product (for new placements)
         this.selectedColors.set(productId, color);
         
-        // If there are placed objects of this product, update their colors
+        // Check if we have a selected accessory of this product type
+        if (this.selectedObject && this.selectedType === 'accessory' && this.selectedId) {
+            const selectedAccessory = this.placedAccessories.get(this.selectedId);
+            if (selectedAccessory && selectedAccessory.productId === productId) {
+                // Only change the selected accessory's color
+                this.sceneManager.setObjectColor(selectedAccessory.object, color);
+                this.updateSummarySection();
+                return;
+            }
+        }
+        
+        // Check if we have a selected panel of this product type
+        if (this.selectedObject && this.selectedType === 'panel' && this.selectedId) {
+            const selectedPanel = this.multiPanelManager.getPanel(this.selectedId);
+            if (selectedPanel && selectedPanel.productId === productId) {
+                // Only change the selected panel's color
+                this.sceneManager.setObjectColor(selectedPanel.object, color);
+                this.updateSummarySection();
+                return;
+            }
+        }
+        
+        // No matching selection - update all placed objects of this product type
         this.updatePlacedObjectsColor(productId, color);
     }
 
@@ -240,6 +262,9 @@ export class UIController {
                 this.sceneManager.setObjectColor(accessory.object, color);
             }
         });
+        
+        // Update summary to reflect new colors
+        this.updateSummarySection();
     }
 
     /**
