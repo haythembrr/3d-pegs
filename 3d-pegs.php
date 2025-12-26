@@ -96,15 +96,8 @@ class Pegboard_Plugin {
 	/**
 	 * Plugins loaded action.
 	 */
-	/**
-	 * Plugins loaded action.
-	 */
 	public function on_plugins_loaded() {
 		// Initialize components
-		// We instantiate these directly to ensure they are loaded.
-		// If the classes are missing, it will cause a fatal error, which is better than silent failure
-		// during development so we know what's wrong.
-		
 		new Product_3D_Integration();
 		new REST_Controller();
 		
@@ -113,6 +106,107 @@ class Pegboard_Plugin {
 		}
 		
 		new Shortcode_Handler();
+		
+		// Register AJAX handlers for cart operations
+		add_action( 'wp_ajax_pegboard_add_to_cart', array( $this, 'ajax_add_to_cart' ) );
+		add_action( 'wp_ajax_nopriv_pegboard_add_to_cart', array( $this, 'ajax_add_to_cart' ) );
+	}
+	
+	/**
+	 * AJAX handler for adding items to cart.
+	 * Works with both simple and variable products.
+	 */
+	public function ajax_add_to_cart() {
+		// Verify this is a valid request
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			wp_send_json_error( array( 'message' => 'WooCommerce not available' ) );
+			return;
+		}
+		
+		$product_id   = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+		$quantity     = isset( $_POST['quantity'] ) ? absint( $_POST['quantity'] ) : 1;
+		$variation_id = isset( $_POST['variation_id'] ) ? absint( $_POST['variation_id'] ) : 0;
+		
+		if ( ! $product_id ) {
+			wp_send_json_error( array( 'message' => 'Invalid product ID' ) );
+			return;
+		}
+		
+		// Get variation attributes if this is a variable product
+		$variation = array();
+		if ( $variation_id > 0 ) {
+			// Get attributes from POST data
+			foreach ( $_POST as $key => $value ) {
+				if ( strpos( $key, 'attribute_' ) === 0 ) {
+					$variation[ sanitize_text_field( $key ) ] = sanitize_text_field( $value );
+				}
+			}
+			
+			// If no attributes in POST, try to get them from the variation
+			if ( empty( $variation ) ) {
+				$variation_obj = wc_get_product( $variation_id );
+				if ( $variation_obj && $variation_obj->is_type( 'variation' ) ) {
+					$variation = $variation_obj->get_variation_attributes();
+				}
+			}
+		}
+		
+		// Validate the product exists
+		$product = wc_get_product( $variation_id > 0 ? $variation_id : $product_id );
+		if ( ! $product ) {
+			wp_send_json_error( array( 'message' => 'Product not found' ) );
+			return;
+		}
+		
+		// Check if product is purchasable
+		if ( ! $product->is_purchasable() ) {
+			wp_send_json_error( array( 'message' => 'Product cannot be purchased' ) );
+			return;
+		}
+		
+		// Check stock
+		if ( ! $product->is_in_stock() ) {
+			wp_send_json_error( array( 'message' => 'Product is out of stock' ) );
+			return;
+		}
+		
+		try {
+			// Add to cart
+			$cart_item_key = WC()->cart->add_to_cart( 
+				$product_id, 
+				$quantity, 
+				$variation_id, 
+				$variation 
+			);
+			
+			if ( $cart_item_key ) {
+				// Success
+				do_action( 'woocommerce_ajax_added_to_cart', $product_id );
+				
+				wp_send_json_success( array(
+					'message'       => 'Product added to cart',
+					'cart_item_key' => $cart_item_key,
+					'product_id'    => $product_id,
+					'variation_id'  => $variation_id,
+					'quantity'      => $quantity,
+					'cart_total'    => WC()->cart->get_cart_contents_count()
+				) );
+			} else {
+				// Failed to add
+				$error_message = 'Failed to add product to cart';
+				
+				// Try to get WooCommerce notices for more details
+				$notices = wc_get_notices( 'error' );
+				if ( ! empty( $notices ) ) {
+					$error_message = wp_strip_all_tags( $notices[0]['notice'] ?? $notices[0] );
+					wc_clear_notices();
+				}
+				
+				wp_send_json_error( array( 'message' => $error_message ) );
+			}
+		} catch ( \Exception $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
 	}
 }
 

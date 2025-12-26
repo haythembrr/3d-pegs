@@ -2087,25 +2087,37 @@ export class UIController {
             let variationAttributes: { attribute: string; value: string }[] | undefined;
             
             if (product && color && product.color_variation_map) {
-                // color_variation_map now contains { id, attributes } objects
-                const variationData = product.color_variation_map[color] || product.color_variation_map[color.toLowerCase()];
+                // Try exact color match first, then lowercase, then uppercase
+                const variationData = product.color_variation_map[color] 
+                    || product.color_variation_map[color.toLowerCase()]
+                    || product.color_variation_map[color.toUpperCase()];
+                    
                 if (variationData) {
                     // Handle both old format (number) and new format ({ id, attributes })
                     if (typeof variationData === 'number') {
                         variationId = variationData;
-                    } else {
+                    } else if (variationData && typeof variationData === 'object') {
                         variationId = variationData.id;
-                        variationAttributes = variationData.attributes;
+                        // Ensure attributes is a valid array
+                        if (Array.isArray(variationData.attributes) && variationData.attributes.length > 0) {
+                            variationAttributes = variationData.attributes.map(attr => ({
+                                attribute: String(attr.attribute || ''),
+                                value: String(attr.value || '')
+                            })).filter(attr => attr.attribute && attr.value);
+                        }
                     }
                 }
             }
             
-            items.push({
-                productId: panel.productId,
-                quantity: 1,
-                variationId,
-                variationAttributes
-            });
+            // Only add if we have valid data
+            if (panel.productId) {
+                items.push({
+                    productId: panel.productId,
+                    quantity: 1,
+                    variationId: variationId && variationId > 0 ? variationId : undefined,
+                    variationAttributes: variationAttributes && variationAttributes.length > 0 ? variationAttributes : undefined
+                });
+            }
         });
         
         // Add accessories with their colors
@@ -2115,25 +2127,37 @@ export class UIController {
             let variationAttributes: { attribute: string; value: string }[] | undefined;
             
             if (product && accessory.color && product.color_variation_map) {
-                // color_variation_map now contains { id, attributes } objects
-                const variationData = product.color_variation_map[accessory.color] || product.color_variation_map[accessory.color.toLowerCase()];
+                // Try exact color match first, then lowercase, then uppercase
+                const variationData = product.color_variation_map[accessory.color] 
+                    || product.color_variation_map[accessory.color.toLowerCase()]
+                    || product.color_variation_map[accessory.color.toUpperCase()];
+                    
                 if (variationData) {
                     // Handle both old format (number) and new format ({ id, attributes })
                     if (typeof variationData === 'number') {
                         variationId = variationData;
-                    } else {
+                    } else if (variationData && typeof variationData === 'object') {
                         variationId = variationData.id;
-                        variationAttributes = variationData.attributes;
+                        // Ensure attributes is a valid array
+                        if (Array.isArray(variationData.attributes) && variationData.attributes.length > 0) {
+                            variationAttributes = variationData.attributes.map(attr => ({
+                                attribute: String(attr.attribute || ''),
+                                value: String(attr.value || '')
+                            })).filter(attr => attr.attribute && attr.value);
+                        }
                     }
                 }
             }
             
-            items.push({
-                productId: accessory.productId,
-                quantity: 1,
-                variationId,
-                variationAttributes
-            });
+            // Only add if we have valid data
+            if (accessory.productId) {
+                items.push({
+                    productId: accessory.productId,
+                    quantity: 1,
+                    variationId: variationId && variationId > 0 ? variationId : undefined,
+                    variationAttributes: variationAttributes && variationAttributes.length > 0 ? variationAttributes : undefined
+                });
+            }
         });
         
         return items;

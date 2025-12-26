@@ -58,16 +58,10 @@ class Shortcode_Handler {
 
 				<!-- Action controls overlay (right) -->
 				<div class="pegboard-action-controls">
-					<button class="pegboard-action-btn pegboard-theme-btn" id="pegboard-theme-toggle" title="<?php esc_attr_e( 'Mode nuit', '3d-pegs' ); ?>">
-						☀️
-					</button>
-					<button class="pegboard-action-btn pegboard-delete-btn hidden" id="pegboard-delete-selected" title="<?php esc_attr_e( 'Supprimer la sélection', '3d-pegs' ); ?>">
-						✕
-					</button>
+					<button class="pegboard-action-btn pegboard-theme-btn" id="pegboard-theme-toggle" title="<?php esc_attr_e( 'Mode nuit', '3d-pegs' ); ?>">☀️</button>
+					<button class="pegboard-action-btn pegboard-delete-btn hidden" id="pegboard-delete-selected" title="<?php esc_attr_e( 'Supprimer la sélection', '3d-pegs' ); ?>">✕</button>
 					<div class="pegboard-help-btn-wrapper">
-						<button class="pegboard-action-btn pegboard-help-btn" id="pegboard-help-btn" title="<?php esc_attr_e( 'Aide', '3d-pegs' ); ?>">
-							?
-						</button>
+						<button class="pegboard-action-btn pegboard-help-btn" id="pegboard-help-btn" title="<?php esc_attr_e( 'Aide', '3d-pegs' ); ?>">?</button>
 						<div class="pegboard-help-tooltip">
 							<p><?php _e( 'Cliquez sur un produit pour l\'ajouter à la scène', '3d-pegs' ); ?></p>
 							<p><?php _e( 'Cliquez sur un objet pour le sélectionner, puis glissez pour le déplacer', '3d-pegs' ); ?></p>
@@ -76,9 +70,7 @@ class Shortcode_Handler {
 					
 					<!-- Zoom control with pop-down on mobile -->
 					<div class="pegboard-zoom-wrapper" id="pegboard-zoom-wrapper">
-						<button class="pegboard-action-btn pegboard-zoom-btn" id="pegboard-zoom-btn" title="<?php esc_attr_e( 'Zoom', '3d-pegs' ); ?>">
-							🔍
-						</button>
+						<button class="pegboard-action-btn pegboard-zoom-btn" id="pegboard-zoom-btn" title="<?php esc_attr_e( 'Zoom', '3d-pegs' ); ?>">🔍</button>
 						<div class="pegboard-zoom-control" id="pegboard-zoom-control">
 							<span class="zoom-icon zoom-in" title="<?php esc_attr_e( 'Zoom avant', '3d-pegs' ); ?>">+</span>
 							<div class="zoom-slider-track">
@@ -143,9 +135,6 @@ class Shortcode_Handler {
 	/**
 	 * Maybe enqueue scripts (only on pages with shortcode).
 	 */
-	/**
-	 * Maybe enqueue scripts (only on pages with shortcode).
-	 */
 	public function maybe_enqueue_scripts() {
 		global $post;
 
@@ -162,18 +151,16 @@ class Shortcode_Handler {
 			// Check if bundle exists
 			$bundle_url = PEGBOARD3D_PLUGIN_URL . 'assets/bundle/pegboard-3d.es.js';
 			
-			// Pass configuration to JavaScript
-			// Note: We need to do this here because we might not be in the loop context yet,
-			// but we need the localized script data available when the script loads.
+			// Ensure WooCommerce scripts are loaded for Store API nonce
+			if ( function_exists( 'WC' ) ) {
+				// Enqueue WooCommerce cart fragments for mini-cart updates
+				wp_enqueue_script( 'wc-cart-fragments' );
+			}
 			
-			// Enqueue main bundle
-			// Note: We do NOT rely on external threejs since it's bundled in the es module (unless configured otherwise).
-			// If we wanted to share threejs, we would need to shim it or use import maps.
-			// For now, simpler to use the bundled version.
 			wp_enqueue_script(
 				'pegboard-3d-main',
 				$bundle_url,
-				array(), // No external dependencies (Three.js is bundled)
+				array( 'wp-api-fetch' ), // Depend on wp-api-fetch for nonce handling
 				PEGBOARD3D_VERSION,
 				true
 			);
@@ -181,11 +168,8 @@ class Shortcode_Handler {
 			// Re-fetch default products data for localization
 			$data = $this->get_products_data();
 			
-			// Get WooCommerce Store API nonce
-			$store_api_nonce = '';
-			if ( function_exists( 'wp_create_nonce' ) ) {
-				$store_api_nonce = wp_create_nonce( 'wc_store_api' );
-			}
+			// Get WooCommerce Store API nonce using robust method
+			$store_api_nonce = $this->get_store_api_nonce();
 			
 			// Get WooCommerce cart page URL
 			$cart_url = function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '/cart';
@@ -193,16 +177,28 @@ class Shortcode_Handler {
 			// Get WooCommerce currency settings
 			$currency_settings = $this->get_currency_settings();
 			
-			wp_localize_script( 'pegboard-3d-main', 'Pegboard3DConfig', array(
-				'defaultPanel' => '', 
-				'theme' => 'light',
-				'apiUrl' => rest_url( 'pegboard-3d/v1' ),
-				'cartApiUrl' => rest_url( 'wc/store/v1/cart/add-item' ),
-				'cartPageUrl' => $cart_url,
-				'storeApiNonce' => $store_api_nonce,
-				'products' => $data,
-				'currency' => $currency_settings
-			) );
+			// Build config with debug info
+			$config = array(
+				'defaultPanel'   => '', 
+				'theme'          => 'light',
+				'apiUrl'         => rest_url( 'pegboard-3d/v1' ),
+				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+				'cartApiUrl'     => rest_url( 'wc/store/v1/cart/add-item' ),
+				'cartPageUrl'    => $cart_url,
+				'storeApiNonce'  => $store_api_nonce,
+				'products'       => $data,
+				'currency'       => $currency_settings,
+				'debug'          => array(
+					'pluginVersion'    => PEGBOARD3D_VERSION,
+					'wcVersion'        => defined( 'WC_VERSION' ) ? WC_VERSION : 'N/A',
+					'wpVersion'        => get_bloginfo( 'version' ),
+					'nonceMethod'      => $this->last_nonce_method,
+					'productCount'     => count( $data ),
+					'timestamp'        => current_time( 'mysql' ),
+				),
+			);
+			
+			wp_localize_script( 'pegboard-3d-main', 'Pegboard3DConfig', $config );
 
 			// Enqueue styles
 			wp_enqueue_style(
@@ -211,6 +207,77 @@ class Shortcode_Handler {
 				array(),
 				PEGBOARD3D_VERSION
 			);
+		}
+	}
+	
+	/**
+	 * Track which nonce method was used (for debugging)
+	 */
+	private $last_nonce_method = 'none';
+	
+	/**
+	 * Get WooCommerce Store API nonce with multiple fallback methods.
+	 * This is robust across different WooCommerce versions.
+	 *
+	 * @return string The nonce string
+	 */
+	private function get_store_api_nonce() {
+		$nonce = '';
+		
+		// Method 1: Try WooCommerce Blocks StoreApi (WC 6.9+)
+		// Use method_exists to check if the method is available
+		if ( class_exists( '\Automattic\WooCommerce\StoreApi\StoreApi' ) ) {
+			try {
+				$container = \Automattic\WooCommerce\StoreApi\StoreApi::container();
+				if ( $container && class_exists( '\Automattic\WooCommerce\StoreApi\Authentication' ) ) {
+					$auth = $container->get( \Automattic\WooCommerce\StoreApi\Authentication::class );
+					// Check if get_nonce method exists before calling
+					if ( $auth && method_exists( $auth, 'get_nonce' ) ) {
+						$nonce = $auth->get_nonce();
+						if ( ! empty( $nonce ) ) {
+							$this->last_nonce_method = 'StoreApi::Authentication::get_nonce';
+							return $nonce;
+						}
+					}
+				}
+			} catch ( \Exception $e ) {
+				// Log error and continue to fallback
+				$this->log_debug( 'StoreApi nonce method failed: ' . $e->getMessage() );
+			} catch ( \Error $e ) {
+				// Catch PHP errors too (like undefined method)
+				$this->log_debug( 'StoreApi nonce method error: ' . $e->getMessage() );
+			}
+		}
+		
+		// Method 2: Try to get nonce from WooCommerce Blocks settings
+		if ( empty( $nonce ) && function_exists( 'wp_create_nonce' ) ) {
+			// The Store API accepts 'wc_store_api' nonce
+			$nonce = wp_create_nonce( 'wc_store_api' );
+			if ( ! empty( $nonce ) ) {
+				$this->last_nonce_method = 'wp_create_nonce(wc_store_api)';
+				return $nonce;
+			}
+		}
+		
+		// Method 3: Fallback to WordPress REST API nonce
+		if ( empty( $nonce ) && function_exists( 'wp_create_nonce' ) ) {
+			$nonce = wp_create_nonce( 'wp_rest' );
+			$this->last_nonce_method = 'wp_create_nonce(wp_rest)';
+			return $nonce;
+		}
+		
+		$this->last_nonce_method = 'none_available';
+		return '';
+	}
+	
+	/**
+	 * Log debug information (only when WP_DEBUG is enabled)
+	 *
+	 * @param string $message The message to log
+	 */
+	private function log_debug( $message ) {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[Pegboard3D] ' . $message );
 		}
 	}
 	
