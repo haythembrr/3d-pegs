@@ -15,7 +15,6 @@ class Shortcode_Handler {
 	 * Constructor.
 	 */
 	public function __construct() {
-		error_log( 'Shortcode_Handler initialized' );
 		add_shortcode( 'pegboard_configurator', array( $this, 'render_configurator' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'maybe_enqueue_scripts' ) );
 		add_filter( 'script_loader_tag', array( $this, 'add_type_attribute' ), 10, 3 );
@@ -28,7 +27,6 @@ class Shortcode_Handler {
 	 * @return string HTML output.
 	 */
 	public function render_configurator( $atts ) {
-		error_log( 'render_configurator called' );
 		// Parse attributes
 		$atts = shortcode_atts( array(
 			'default_panel' => '',
@@ -73,6 +71,28 @@ class Shortcode_Handler {
 						<div class="pegboard-help-tooltip">
 							<p><?php _e( 'Cliquez sur un produit pour l\'ajouter à la scène', '3d-pegs' ); ?></p>
 							<p><?php _e( 'Cliquez sur un objet pour le sélectionner, puis glissez pour le déplacer', '3d-pegs' ); ?></p>
+						</div>
+					</div>
+					
+					<!-- Zoom control with pop-down on mobile -->
+					<div class="pegboard-zoom-wrapper" id="pegboard-zoom-wrapper">
+						<button class="pegboard-action-btn pegboard-zoom-btn" id="pegboard-zoom-btn" title="<?php esc_attr_e( 'Zoom', '3d-pegs' ); ?>">
+							🔍
+						</button>
+						<div class="pegboard-zoom-control" id="pegboard-zoom-control">
+							<span class="zoom-icon zoom-in" title="<?php esc_attr_e( 'Zoom avant', '3d-pegs' ); ?>">+</span>
+							<div class="zoom-slider-track">
+								<input type="range" 
+									   id="pegboard-zoom-slider" 
+									   class="zoom-slider" 
+									   min="0" 
+									   max="100" 
+									   value="50"
+									   orient="vertical"
+									   title="<?php esc_attr_e( 'Zoom', '3d-pegs' ); ?>">
+								<div class="zoom-slider-fill" id="pegboard-zoom-fill"></div>
+							</div>
+							<span class="zoom-icon zoom-out" title="<?php esc_attr_e( 'Zoom arrière', '3d-pegs' ); ?>">−</span>
 						</div>
 					</div>
 				</div>

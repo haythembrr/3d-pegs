@@ -25,10 +25,14 @@ export class ModelLoader {
         this.loader = new GLTFLoader();
         this.cache = new Map();
 
-        // Optional: Setup DRACO loader for compressed models
-        const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath('/path/to/draco/'); // Update this path
-        this.loader.setDRACOLoader(dracoLoader);
+        // Setup DRACO loader for compressed models with graceful fallback
+        try {
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+            this.loader.setDRACOLoader(dracoLoader);
+        } catch {
+            // DRACO loader setup failed - GLB files without DRACO compression will still work
+        }
     }
 
     /**

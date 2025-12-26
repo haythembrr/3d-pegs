@@ -166,9 +166,6 @@ class Product_3D_Integration {
 			var variations = <?php echo json_encode( $variations ); ?>;
 			var savedMap = <?php echo json_encode( $color_variation_map ); ?>;
 			
-			console.log('3D Config - Variations found:', variations);
-			console.log('3D Config - Saved mappings:', savedMap);
-			
 			document.getElementById('pegboard_3d_type').addEventListener('change', function(e) {
 				document.getElementById('pegboard-specific-fields').style.display = (e.target.value === 'pegboard') ? 'block' : 'none';
 				document.getElementById('accessory-specific-fields').style.display = (e.target.value === 'accessory') ? 'block' : 'none';

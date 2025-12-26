@@ -80,8 +80,6 @@ export class CartIntegration {
             // Group items by productId to reduce API calls
             const groupedItems = this.groupItemsByProduct(items);
             
-            console.log('[addToCart] Adding items sequentially:', groupedItems);
-            
             // Add items sequentially to avoid race conditions with WooCommerce cart
             const errors: string[] = [];
             let successCount = 0;
@@ -90,10 +88,8 @@ export class CartIntegration {
                 try {
                     await this.addSingleItem(item);
                     successCount++;
-                    console.log('[addToCart] Successfully added item:', item);
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                    console.error('[addToCart] Failed to add item:', item, errorMsg);
                     errors.push(`Product ${item.productId}: ${errorMsg}`);
                 }
             }
@@ -104,8 +100,7 @@ export class CartIntegration {
                 // All items failed
                 return this.handleError(new Error(errors.join('; ')));
             } else if (errors.length > 0) {
-                // Some items failed - still redirect but log warnings
-                console.warn('[addToCart] Some items failed:', errors);
+                // Some items failed - still redirect but continue
                 return this.handleSuccess();
             } else {
                 // All items succeeded
@@ -149,14 +144,6 @@ export class CartIntegration {
         // The WooCommerce Store API expects the variation ID, not the parent product ID
         const productId = item.variationId || item.productId;
         
-        console.log('[addSingleItem] Adding item:', { 
-            originalProductId: item.productId, 
-            variationId: item.variationId, 
-            variationAttributes: item.variationAttributes,
-            usingId: productId, 
-            quantity: item.quantity 
-        });
-        
         const body: Record<string, unknown> = {
             id: productId,
             quantity: item.quantity
@@ -178,8 +165,6 @@ export class CartIntegration {
             headers['X-WC-Store-API-Nonce'] = this.nonce;
         }
 
-        console.log('[addSingleItem] Request body:', body);
-
         const response = await fetch(this.apiUrl, {
             method: 'POST',
             headers,
@@ -189,7 +174,6 @@ export class CartIntegration {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error('[addSingleItem] Error response:', errorData);
             const errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
             throw new Error(errorMessage);
         }
@@ -257,8 +241,6 @@ export class CartIntegration {
      * Handle error
      */
     public handleError(error: Error): CartResponse {
-        console.error('Cart error:', error);
-
         this.showMessage(
             'Erreur lors de l\'ajout au panier. Veuillez réessayer.',
             'error'

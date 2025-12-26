@@ -448,6 +448,44 @@ export class SceneManager {
     }
 
     /**
+     * Get the current zoom level (camera distance from target)
+     * Returns a normalized value between 0 (closest) and 1 (farthest)
+     */
+    public getZoomLevel(): number {
+        const distance = this.camera.position.distanceTo(this.controls.target);
+        const minDist = this.controls.minDistance;
+        const maxDist = this.controls.maxDistance;
+        // Normalize: 0 = closest (minDistance), 1 = farthest (maxDistance)
+        return (distance - minDist) / (maxDist - minDist);
+    }
+
+    /**
+     * Set the zoom level by moving the camera closer/farther from target
+     * @param level Normalized zoom level: 0 = closest, 1 = farthest
+     */
+    public setZoomLevel(level: number): void {
+        const minDist = this.controls.minDistance;
+        const maxDist = this.controls.maxDistance;
+        const targetDistance = minDist + level * (maxDist - minDist);
+        
+        // Get direction from target to camera
+        const direction = this.camera.position.clone().sub(this.controls.target).normalize();
+        
+        // Set new camera position at the target distance
+        const newPosition = this.controls.target.clone().add(direction.multiplyScalar(targetDistance));
+        this.camera.position.copy(newPosition);
+        
+        this.controls.update();
+    }
+
+    /**
+     * Get the OrbitControls instance for external event listening
+     */
+    public getControls(): OrbitControls {
+        return this.controls;
+    }
+
+    /**
      * Cleanup
      */
     public dispose(): void {

@@ -285,6 +285,176 @@
 }
 
 /* ============================================
+   Zoom Slider Control
+   ============================================ */
+.pegboard-zoom-wrapper {
+    position: relative;
+}
+
+/* Zoom button - always visible, triggers pop-down */
+.pegboard-zoom-btn {
+    display: flex;
+}
+
+/* Zoom control - pop-down panel */
+.pegboard-zoom-control {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 8px;
+    background: var(--pb-surface);
+    border-radius: var(--pb-radius-sm);
+    box-shadow: var(--pb-shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    z-index: 200;
+}
+
+.pegboard-zoom-control.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.zoom-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--pb-text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.zoom-icon:hover {
+    color: var(--pb-primary);
+    background: var(--pb-bg);
+}
+
+.zoom-icon:active {
+    transform: scale(0.9);
+}
+
+.zoom-slider-track {
+    position: relative;
+    width: 28px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Custom vertical slider styling */
+.zoom-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 6px;
+    background: transparent;
+    cursor: pointer;
+    transform: rotate(-90deg);
+    transform-origin: center center;
+    margin: 0;
+    position: absolute;
+}
+
+/* Track styling */
+.zoom-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    background: var(--pb-border);
+    border-radius: 3px;
+    transition: background 0.15s ease;
+}
+
+.zoom-slider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    background: var(--pb-border);
+    border-radius: 3px;
+}
+
+/* Thumb styling */
+.zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--pb-primary);
+    border-radius: 50%;
+    cursor: grab;
+    margin-top: -6px;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    transition: all 0.15s ease;
+    border: 2px solid white;
+}
+
+.zoom-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--pb-primary);
+    border-radius: 50%;
+    cursor: grab;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    border: 2px solid white;
+}
+
+.zoom-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.5);
+}
+
+.zoom-slider::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.5);
+}
+
+.zoom-slider::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.1);
+}
+
+.zoom-slider::-moz-range-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.1);
+}
+
+/* Focus state */
+.zoom-slider:focus {
+    outline: none;
+}
+
+.zoom-slider:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+/* Fill indicator (visual enhancement) */
+.zoom-slider-fill {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 50%;
+    background: linear-gradient(to top, var(--pb-primary), rgba(59, 130, 246, 0.3));
+    border-radius: 3px;
+    pointer-events: none;
+    transition: height 0.1s ease;
+}
+
+/* ============================================
    Contextual Hint Popup
    ============================================ */
 .pegboard-context-hint {
@@ -307,8 +477,10 @@
     visibility: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
-    max-width: 90%;
+    max-width: calc(100% - 8px);
     white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 .pegboard-context-hint.visible {
@@ -320,10 +492,13 @@
 .pegboard-context-hint .hint-icon {
     font-size: 20px;
     line-height: 1;
+    flex-shrink: 0;
 }
 
 .pegboard-context-hint .hint-text {
     color: var(--pb-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Hint variants */
@@ -333,6 +508,11 @@
 
 .pegboard-context-hint.hint-selection {
     border-left: 4px solid var(--pb-success);
+}
+
+.pegboard-context-hint.hint-error {
+    border-left: 4px solid var(--pb-danger);
+    background: var(--pb-danger-light);
 }
 
 /* ============================================
@@ -837,6 +1017,22 @@
         font-size: 16px;
     }
     
+    /* Zoom control - smaller on mobile */
+    .zoom-slider-track {
+        width: 28px;
+        height: 80px;
+    }
+    
+    .zoom-slider {
+        width: 80px;
+    }
+    
+    .zoom-icon {
+        width: 22px;
+        height: 22px;
+        font-size: 14px;
+    }
+    
     .pegboard-help-tooltip {
         top: calc(100% + 10px);
         right: 0;
@@ -851,6 +1047,34 @@
     /* Mobile tooltip visible state */
     .pegboard-help-tooltip.visible {
         transform: translateY(0) !important;
+    }
+    
+    /* Context hint - mobile adjustments */
+    .pegboard-context-hint {
+        bottom: 60px; /* Above the camera controls */
+        left: 12px;
+        right: 12px;
+        transform: translateY(10px);
+        padding: 8px 12px;
+        font-size: 11px;
+        gap: 6px;
+        max-width: none;
+        width: auto;
+        white-space: normal;
+        text-align: center;
+    }
+    
+    .pegboard-context-hint.visible {
+        transform: translateY(0);
+    }
+    
+    .pegboard-context-hint .hint-icon {
+        font-size: 14px;
+    }
+    
+    .pegboard-context-hint .hint-text {
+        line-height: 1.2;
+        font-size: 11px;
     }
 
     .pegboard-camera-controls {
@@ -924,10 +1148,51 @@
         font-size: 14px;
     }
     
+    /* Zoom control - smaller pop-down on small mobile */
+    .pegboard-zoom-control {
+        padding: 8px 6px;
+        gap: 5px;
+    }
+    
+    .zoom-slider-track {
+        width: 24px;
+        height: 60px;
+    }
+    
+    .zoom-slider {
+        width: 60px;
+    }
+    
+    .zoom-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+    }
+    
     .pegboard-help-tooltip {
         width: 180px;
         padding: 10px 12px;
         font-size: 11px;
+    }
+    
+    /* Context hint - small mobile adjustments */
+    .pegboard-context-hint {
+        bottom: 50px;
+        left: 8px;
+        right: 8px;
+        padding: 6px 10px;
+        font-size: 10px;
+        gap: 5px;
+        border-radius: var(--pb-radius-sm);
+    }
+    
+    .pegboard-context-hint .hint-icon {
+        font-size: 12px;
+    }
+    
+    .pegboard-context-hint .hint-text {
+        font-size: 10px;
+        line-height: 1.2;
     }
 
     .pegboard-camera-controls {

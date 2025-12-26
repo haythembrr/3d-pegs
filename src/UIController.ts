@@ -79,10 +79,47 @@ export class UIController {
     // Currently active product for placement
     private activeProductId: number | null = null;
 
+    /**
+     * Check if WebGL is supported in the current browser
+     */
+    private static isWebGLSupported(): boolean {
+        try {
+            const canvas = document.createElement('canvas');
+            return !!(
+                window.WebGLRenderingContext &&
+                (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Display a fallback message when WebGL is not supported
+     */
+    private static showWebGLFallback(container: HTMLElement): void {
+        container.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: #666; font-family: sans-serif;">
+                <div style="font-size: 48px; margin-bottom: 16px;">🖥️</div>
+                <h3 style="margin: 0 0 12px 0; color: #333;">Navigateur non compatible</h3>
+                <p style="margin: 0; line-height: 1.5;">
+                    Votre navigateur ne supporte pas WebGL, nécessaire pour afficher le configurateur 3D.<br>
+                    Veuillez utiliser un navigateur moderne (Chrome, Firefox, Safari, Edge).
+                </p>
+            </div>
+        `;
+    }
+
     constructor(containerId: string, config: any) {
         const container = document.getElementById(containerId);
         if (!container) {
             throw new Error(`Container ${containerId} not found`);
+        }
+
+        // Check WebGL support before initializing 3D components
+        if (!UIController.isWebGLSupported()) {
+            UIController.showWebGLFallback(container);
+            throw new Error('WebGL not supported');
         }
 
         // Initialize all components
@@ -268,8 +305,111 @@ export class UIController {
             themeBtn.addEventListener('click', () => this.toggleDarkMode(themeBtn));
         }
         
+        // Zoom slider control
+        this.setupZoomSlider();
+        
         // Help button tooltip for mobile (touch devices)
         this.setupMobileHelpTooltip();
+    }
+    
+    /**
+     * Setup zoom slider control
+     */
+    private setupZoomSlider(): void {
+        const slider = document.getElementById('pegboard-zoom-slider') as HTMLInputElement;
+        const fill = document.getElementById('pegboard-zoom-fill');
+        const zoomIn = document.querySelector('.zoom-icon.zoom-in');
+        const zoomOut = document.querySelector('.zoom-icon.zoom-out');
+        const zoomBtn = document.getElementById('pegboard-zoom-btn');
+        const zoomControl = document.getElementById('pegboard-zoom-control');
+        
+        if (!slider) return;
+        
+        // Update fill indicator based on slider value
+        const updateFill = () => {
+            if (fill) {
+                const value = parseInt(slider.value);
+                // Invert: high slider value = zoomed in = more fill from bottom
+                fill.style.height = `${100 - value}%`;
+            }
+        };
+        
+        // Sync slider with camera zoom
+        const syncSliderToCamera = () => {
+            const zoomLevel = this.sceneManager.getZoomLevel();
+            // Convert zoom level (0=close, 1=far) to slider value (0=far, 100=close)
+            slider.value = String(Math.round((1 - zoomLevel) * 100));
+            updateFill();
+        };
+        
+        // Initial sync
+        syncSliderToCamera();
+        
+        // Mobile zoom button toggle (pop-down)
+        if (zoomBtn && zoomControl) {
+            zoomBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = zoomControl.classList.contains('visible');
+                zoomControl.classList.toggle('visible', !isVisible);
+            });
+            
+            // Close zoom control when clicking outside
+            document.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                const wrapper = document.getElementById('pegboard-zoom-wrapper');
+                if (wrapper && !wrapper.contains(target)) {
+                    zoomControl.classList.remove('visible');
+                }
+            });
+            
+            // Close on touch outside
+            document.addEventListener('touchstart', (e) => {
+                const target = e.target as HTMLElement;
+                const wrapper = document.getElementById('pegboard-zoom-wrapper');
+                if (wrapper && !wrapper.contains(target)) {
+                    zoomControl.classList.remove('visible');
+                }
+            }, { passive: true });
+        }
+        
+        // Listen to slider changes
+        slider.addEventListener('input', () => {
+            const value = parseInt(slider.value);
+            // Convert slider value (0=far, 100=close) to zoom level (0=close, 1=far)
+            const zoomLevel = 1 - (value / 100);
+            this.sceneManager.setZoomLevel(zoomLevel);
+            updateFill();
+        });
+        
+        // Zoom in button (+ icon)
+        if (zoomIn) {
+            zoomIn.addEventListener('click', () => {
+                const currentValue = parseInt(slider.value);
+                const newValue = Math.min(100, currentValue + 10);
+                slider.value = String(newValue);
+                const zoomLevel = 1 - (newValue / 100);
+                this.sceneManager.setZoomLevel(zoomLevel);
+                updateFill();
+            });
+        }
+        
+        // Zoom out button (- icon)
+        if (zoomOut) {
+            zoomOut.addEventListener('click', () => {
+                const currentValue = parseInt(slider.value);
+                const newValue = Math.max(0, currentValue - 10);
+                slider.value = String(newValue);
+                const zoomLevel = 1 - (newValue / 100);
+                this.sceneManager.setZoomLevel(zoomLevel);
+                updateFill();
+            });
+        }
+        
+        // Sync slider when user zooms with mouse wheel or pinch
+        const controls = this.sceneManager.getControls();
+        controls.addEventListener('change', () => {
+            syncSliderToCamera();
+        });
     }
     
     /**
@@ -519,7 +659,7 @@ export class UIController {
                 await this.startAccessoryPlacement(product);
             }
         } catch (error) {
-            console.error('Failed to select product:', error);
+            // Error handled silently - product selection failed
         }
     }
 
@@ -534,7 +674,13 @@ export class UIController {
             this.cancelPlacement();
         }
 
-        const model = await this.modelLoader.loadModel(product.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(product.glb_url);
+        } catch {
+            this.showErrorMessage('Impossible de charger le modèle 3D. Veuillez réessayer.');
+            return;
+        }
 
         this.isPlacingPanel = true;
         this.placementType = 'accessory';
@@ -561,7 +707,13 @@ export class UIController {
             this.cancelPlacement();
         }
 
-        const model = await this.modelLoader.loadModel(product.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(product.glb_url);
+        } catch {
+            this.showErrorMessage('Impossible de charger le modèle 3D. Veuillez réessayer.');
+            return;
+        }
 
         this.isPlacingPanel = true;
         this.placementType = 'board';
@@ -660,7 +812,13 @@ export class UIController {
         if (!this.pendingProduct) return false;
         
         // Load the model to get its actual size
-        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        } catch {
+            // If model fails to load, assume no collision to allow retry
+            return false;
+        }
         const tempObject = model.scene.clone();
         tempObject.position.copy(position);
         tempObject.updateMatrixWorld(true);
@@ -834,7 +992,6 @@ export class UIController {
                 const hasCollision = await this.checkInitialPlacementCollision(snapPos);
                 if (hasCollision) {
                     // Don't place if there's a collision
-                    console.warn('Cannot place accessory: collision detected');
                     return;
                 }
                 
@@ -922,7 +1079,14 @@ export class UIController {
         if (!this.pendingProduct || !this.pendingMetadata) return;
         
         const productId = this.pendingProduct.id;
-        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        } catch {
+            this.showErrorMessage('Impossible de charger le modèle 3D. Veuillez réessayer.');
+            this.cancelPlacement();
+            return;
+        }
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.rotation.x = -Math.PI / 2;
 
@@ -953,7 +1117,14 @@ export class UIController {
         if (!this.pendingProduct) return;
         
         const productId = this.pendingProduct.id;
-        const model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(this.pendingProduct.glb_url);
+        } catch {
+            this.showErrorMessage('Impossible de charger le modèle 3D. Veuillez réessayer.');
+            this.cancelPlacement();
+            return;
+        }
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
         scene.position.copy(position);
 
@@ -1653,7 +1824,13 @@ export class UIController {
      * Load a pegboard immediately (internal/default use)
      */
     private async loadPegboard(product: ProductData): Promise<void> {
-        const model = await this.modelLoader.loadModel(product.glb_url);
+        let model;
+        try {
+            model = await this.modelLoader.loadModel(product.glb_url);
+        } catch {
+            this.showErrorMessage('Impossible de charger le panneau. Veuillez rafraîchir la page.');
+            return;
+        }
         
         // Clone with unique materials to prevent shared material issues
         const scene = this.sceneManager.cloneWithUniqueMaterials(model.scene);
@@ -1921,7 +2098,6 @@ export class UIController {
                         variationAttributes = variationData.attributes;
                     }
                 }
-                console.log('[buildCartItems] Panel color:', color, 'map:', product.color_variation_map, 'variationId:', variationId, 'attributes:', variationAttributes);
             }
             
             items.push({
@@ -1950,7 +2126,6 @@ export class UIController {
                         variationAttributes = variationData.attributes;
                     }
                 }
-                console.log('[buildCartItems] Accessory color:', accessory.color, 'map:', product.color_variation_map, 'variationId:', variationId, 'attributes:', variationAttributes);
             }
             
             items.push({
@@ -1961,7 +2136,6 @@ export class UIController {
             });
         });
         
-        console.log('[buildCartItems] Final items:', items);
         return items;
     }
 
@@ -1970,7 +2144,6 @@ export class UIController {
      */
     private async handleAddToCart(): Promise<void> {
         const items = this.buildCartItems();
-        console.log('[handleAddToCart] Items to add:', items);
 
         if (items.length === 0) {
             alert('Veuillez ajouter des éléments à votre configuration');
@@ -2044,6 +2217,43 @@ export class UIController {
                 hintEl.classList.add('hidden');
             }
         }, 300);
+    }
+
+    /**
+     * Show a user-friendly error message
+     * @param message - Error message to display (should be user-friendly, no technical details)
+     */
+    private showErrorMessage(message: string): void {
+        // Use the context hint system to show errors with error styling
+        const hintEl = document.getElementById('pegboard-context-hint');
+        if (!hintEl) return;
+        
+        // Clear any existing timeout
+        if (this.contextHintTimeout) {
+            clearTimeout(this.contextHintTimeout);
+            this.contextHintTimeout = null;
+        }
+        
+        // Update content with error icon
+        const iconEl = hintEl.querySelector('.hint-icon');
+        const textEl = hintEl.querySelector('.hint-text');
+        if (iconEl) iconEl.textContent = '⚠️';
+        if (textEl) textEl.textContent = message;
+        
+        // Update styling for error
+        hintEl.classList.remove('hint-placement', 'hint-selection');
+        hintEl.classList.add('hint-error');
+        
+        // Show hint
+        hintEl.classList.remove('hidden');
+        void hintEl.offsetWidth;
+        hintEl.classList.add('visible');
+        
+        // Auto-hide after 5 seconds
+        this.contextHintTimeout = window.setTimeout(() => {
+            this.hideContextHint();
+            hintEl.classList.remove('hint-error');
+        }, 5000);
     }
 
     /**

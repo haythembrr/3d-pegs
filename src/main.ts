@@ -15,7 +15,11 @@ const initApp = () => {
         try {
             new UIController('pegboard-3d-container', config);
         } catch (error) {
-            console.error('Failed to initialize 3D Configurator:', error);
+            // Display user-friendly error message
+            const container = document.getElementById('pegboard-3d-container');
+            if (container) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Impossible de charger le configurateur 3D. Veuillez rafraîchir la page.</div>';
+            }
         }
     }
 };
