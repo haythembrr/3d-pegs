@@ -259,6 +259,13 @@
     transform: translateX(0);
 }
 
+/* Tooltip visible state (for touch devices via JS) */
+.pegboard-help-tooltip.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto;
+}
+
 /* ============================================
    Sidebar - Takes ~30% width (max 320px)
    ============================================ */
@@ -387,16 +394,10 @@
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
     }
     
-    /* Help tooltip - controlled by JS on touch devices */
+    /* Help tooltip - disable hover on touch devices */
     .pegboard-help-btn-wrapper:hover .pegboard-help-tooltip {
         opacity: 0;
         visibility: hidden;
-    }
-    
-    .pegboard-help-tooltip.visible {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
     }
 }
 
@@ -723,6 +724,11 @@
     
     .pegboard-help-btn-wrapper:hover .pegboard-help-tooltip {
         transform: translateY(0);
+    }
+    
+    /* Mobile tooltip visible state */
+    .pegboard-help-tooltip.visible {
+        transform: translateY(0) !important;
     }
 
     .pegboard-camera-controls {

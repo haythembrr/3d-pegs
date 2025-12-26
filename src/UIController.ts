@@ -1573,7 +1573,7 @@ export class UIController {
         const priceEl = document.querySelector('#pegboard-price-display .amount');
         if (priceEl) {
             const total = this.priceCalculator.getTotal();
-            priceEl.textContent = `${total.toFixed(2)} €`;
+            priceEl.textContent = `${total.toFixed(2)} /* € */`;
         }
 
         // Update summary section with grouped items and colors
