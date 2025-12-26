@@ -60,5 +60,7 @@ export interface ProductData {
     price?: number;
     color_variants?: string[]; // Array of hex colors like ['#1a1a2e', '#16213e']
     color_variation_map?: Record<string, VariationData>; // Maps hex color to WooCommerce variation data (ID + attributes)
+    in_stock?: boolean; // Whether the product (or any variation) is in stock
+    stock_by_color?: Record<string, boolean>; // Stock status per color variant
     [key: string]: any;
 }

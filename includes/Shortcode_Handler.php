@@ -230,9 +230,10 @@ class Shortcode_Handler {
 		foreach ( $pegboards as $post ) {
 			$config = Product_3D_Integration::get_3d_config( $post->ID );
 			
-			// Get WooCommerce price if available
+			// Get WooCommerce product and stock info
 			$product = wc_get_product( $post->ID );
 			$price = $product ? floatval( $product->get_price() ) : 0;
+			$stock_info = $this->get_product_stock_info( $product, $config );
 
 			$products_data[] = array(
 				'id' => $post->ID,
@@ -242,7 +243,9 @@ class Shortcode_Handler {
 				'glb_url' => $config['glb_url'],
 				'color_variants' => $config['color_variants'],
 				'color_variation_map' => $config['color_variation_map'],
-				'metadata' => $config
+				'metadata' => $config,
+				'in_stock' => $stock_info['in_stock'],
+				'stock_by_color' => $stock_info['stock_by_color']
 			);
 		}
 
@@ -257,8 +260,10 @@ class Shortcode_Handler {
 		foreach ( $accessories as $post ) {
 			$config = Product_3D_Integration::get_3d_config( $post->ID );
 			
+			// Get WooCommerce product and stock info
 			$product = wc_get_product( $post->ID );
 			$price = $product ? floatval( $product->get_price() ) : 0;
+			$stock_info = $this->get_product_stock_info( $product, $config );
 
 			$products_data[] = array(
 				'id' => $post->ID,
@@ -268,11 +273,72 @@ class Shortcode_Handler {
 				'glb_url' => $config['glb_url'],
 				'color_variants' => $config['color_variants'],
 				'color_variation_map' => $config['color_variation_map'],
-				'metadata' => $config
+				'metadata' => $config,
+				'in_stock' => $stock_info['in_stock'],
+				'stock_by_color' => $stock_info['stock_by_color']
 			);
 		}
 
 		return $products_data;
+	}
+	
+	/**
+	 * Get stock information for a product and its color variations.
+	 *
+	 * @param WC_Product|null $product The WooCommerce product.
+	 * @param array $config The 3D config with color_variation_map.
+	 * @return array Stock info with 'in_stock' (bool) and 'stock_by_color' (array).
+	 */
+	private function get_product_stock_info( $product, $config ) {
+		$result = array(
+			'in_stock' => true,
+			'stock_by_color' => array()
+		);
+		
+		if ( ! $product ) {
+			return $result;
+		}
+		
+		// Check if it's a variable product
+		if ( $product->is_type( 'variable' ) ) {
+			$has_any_in_stock = false;
+			
+			// Check stock for each color variation
+			if ( ! empty( $config['color_variation_map'] ) ) {
+				foreach ( $config['color_variation_map'] as $color => $variation_data ) {
+					$variation_id = is_array( $variation_data ) ? $variation_data['id'] : $variation_data;
+					$variation = wc_get_product( $variation_id );
+					
+					if ( $variation ) {
+						$is_in_stock = $variation->is_in_stock();
+						$result['stock_by_color'][ $color ] = $is_in_stock;
+						
+						if ( $is_in_stock ) {
+							$has_any_in_stock = true;
+						}
+					} else {
+						// Variation not found, assume out of stock
+						$result['stock_by_color'][ $color ] = false;
+					}
+				}
+			}
+			
+			// Product is in stock if at least one variation is in stock
+			$result['in_stock'] = $has_any_in_stock;
+			
+		} else {
+			// Simple product - just check the main product stock
+			$result['in_stock'] = $product->is_in_stock();
+			
+			// For simple products, all colors have the same stock status
+			if ( ! empty( $config['color_variants'] ) ) {
+				foreach ( $config['color_variants'] as $color ) {
+					$result['stock_by_color'][ $color ] = $result['in_stock'];
+				}
+			}
+		}
+		
+		return $result;
 	}
 	
 	/**

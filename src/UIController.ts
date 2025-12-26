@@ -335,30 +335,40 @@ export class UIController {
      */
     private renderProductButton(product: ProductData, type: string): string {
         const colors = product.color_variants || [];
+        const isOutOfStock = product.in_stock === false;
+        const stockByColor = product.stock_by_color || {};
         let colorDotsHtml = '';
 
         if (colors.length > 0) {
             colorDotsHtml = `
                 <div class="color-variants">
                     ${colors
-                        .map(
-                            (color) => `
-                        <span class="color-dot" 
+                        .map((color) => {
+                            const colorInStock = stockByColor[color] !== false;
+                            const outOfStockClass = !colorInStock ? 'out-of-stock' : '';
+                            const title = !colorInStock ? `${color} - Rupture de stock` : color;
+                            return `
+                        <span class="color-dot ${outOfStockClass}" 
                               data-product-id="${product.id}" 
                               data-color="${color}"
+                              data-in-stock="${colorInStock}"
                               style="background-color: ${color};"
-                              title="${color}">
+                              title="${title}">
                         </span>
-                    `
-                        )
+                    `;
+                        })
                         .join('')}
                 </div>
             `;
         }
 
+        const outOfStockClass = isOutOfStock ? 'out-of-stock' : '';
+        const outOfStockLabel = isOutOfStock ? '<span class="out-of-stock-label">Rupture</span>' : '';
+
         return `
-            <div class="pegboard-product-btn" data-id="${product.id}" data-type="${type}" tabindex="-1">
+            <div class="pegboard-product-btn ${outOfStockClass}" data-id="${product.id}" data-type="${type}" data-in-stock="${!isOutOfStock}" tabindex="-1">
                 <span class="product-name">${product.name}</span>
+                ${outOfStockLabel}
                 ${colorDotsHtml}
                 <span class="product-price">${this.formatPrice(product.price ?? 0)}</span>
             </div>
@@ -369,7 +379,14 @@ export class UIController {
      * Handle color selection for a product
      */
     private handleColorSelect(productId: number, color: string, _dotElement: HTMLElement): void {
-        // Always store selected color as the default for this product type (for new placements)
+        // Check if this color is in stock
+        const product = this.products.find(p => p.id === productId);
+        if (product && product.stock_by_color && product.stock_by_color[color] === false) {
+            // Color is out of stock, don't allow selection
+            return;
+        }
+        
+        // Store selected color as the default for this product type (for new placements)
         this.selectedColors.set(productId, color);
         
         // Check if we have a selected accessory of this product type
@@ -411,9 +428,15 @@ export class UIController {
     private initializeDefaultColorHighlights(): void {
         this.products.forEach(product => {
             if (product.color_variants && product.color_variants.length > 0) {
-                // Set first color as default if not already set
+                // Set first IN STOCK color as default if not already set
                 if (!this.selectedColors.has(product.id)) {
-                    this.selectedColors.set(product.id, product.color_variants[0]);
+                    // Find first color that is in stock
+                    const firstInStockColor = product.color_variants.find(color => 
+                        !product.stock_by_color || product.stock_by_color[color] !== false
+                    );
+                    if (firstInStockColor) {
+                        this.selectedColors.set(product.id, firstInStockColor);
+                    }
                 }
                 // Highlight the default color dot
                 const defaultColor = this.selectedColors.get(product.id);
@@ -459,14 +482,36 @@ export class UIController {
      */
     private async handleProductSelect(id: number, type: string): Promise<void> {
         try {
+            const product = this.products.find(p => p.id === id);
+            if (!product) return;
+            
+            // Check if product is out of stock
+            if (product.in_stock === false) {
+                // Product is completely out of stock, don't allow placement
+                return;
+            }
+            
+            // Check if the selected color is in stock
+            const selectedColor = this.selectedColors.get(id);
+            if (selectedColor && product.stock_by_color && product.stock_by_color[selectedColor] === false) {
+                // Selected color is out of stock, try to find an in-stock color
+                const inStockColor = product.color_variants?.find(color => 
+                    !product.stock_by_color || product.stock_by_color[color] !== false
+                );
+                if (inStockColor) {
+                    this.selectedColors.set(id, inStockColor);
+                    this.updateColorDotHighlight(id, inStockColor);
+                } else {
+                    // No colors in stock
+                    return;
+                }
+            }
+            
             // Deselect any currently selected object when starting placement
             if (this.selectedObject) {
                 this.deselectObject();
                 this.updatePriceDisplay();
             }
-
-            const product = this.products.find(p => p.id === id);
-            if (!product) return;
 
             if (type === 'pegboard') {
                 await this.startPlacement(product);
