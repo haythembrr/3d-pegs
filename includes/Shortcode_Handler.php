@@ -64,17 +64,23 @@ class Shortcode_Handler {
 						☀️
 					</button>
 					<button class="pegboard-action-btn pegboard-delete-btn hidden" id="pegboard-delete-selected" title="<?php esc_attr_e( 'Supprimer la sélection', '3d-pegs' ); ?>">
-						🗑️
+						✕
 					</button>
 					<div class="pegboard-help-btn-wrapper">
 						<button class="pegboard-action-btn pegboard-help-btn" id="pegboard-help-btn" title="<?php esc_attr_e( 'Aide', '3d-pegs' ); ?>">
-							💡
+							?
 						</button>
 						<div class="pegboard-help-tooltip">
 							<p><?php _e( 'Cliquez sur un produit pour l\'ajouter à la scène', '3d-pegs' ); ?></p>
 							<p><?php _e( 'Cliquez sur un objet pour le sélectionner, puis glissez pour le déplacer', '3d-pegs' ); ?></p>
 						</div>
 					</div>
+				</div>
+				
+				<!-- Contextual hint popup -->
+				<div id="pegboard-context-hint" class="pegboard-context-hint hidden">
+					<span class="hint-icon"></span>
+					<span class="hint-text"></span>
 				</div>
 				
 				<!-- 3D Canvas -->
@@ -164,6 +170,9 @@ class Shortcode_Handler {
 			// Get WooCommerce cart page URL
 			$cart_url = function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '/cart';
 			
+			// Get WooCommerce currency settings
+			$currency_settings = $this->get_currency_settings();
+			
 			wp_localize_script( 'pegboard-3d-main', 'Pegboard3DConfig', array(
 				'defaultPanel' => '', 
 				'theme' => 'light',
@@ -171,7 +180,8 @@ class Shortcode_Handler {
 				'cartApiUrl' => rest_url( 'wc/store/v1/cart/add-item' ),
 				'cartPageUrl' => $cart_url,
 				'storeApiNonce' => $store_api_nonce,
-				'products' => $data
+				'products' => $data,
+				'currency' => $currency_settings
 			) );
 
 			// Enqueue styles
@@ -263,5 +273,42 @@ class Shortcode_Handler {
 		}
 
 		return $products_data;
+	}
+	
+	/**
+	 * Get WooCommerce currency settings for JavaScript.
+	 *
+	 * @return array Currency settings.
+	 */
+	private function get_currency_settings() {
+		// Default settings (fallback if WooCommerce is not available)
+		$settings = array(
+			'code' => 'EUR',
+			'symbol' => '€',
+			'position' => 'right_space', // left, right, left_space, right_space
+			'decimals' => 2,
+			'decimal_separator' => ',',
+			'thousand_separator' => ' '
+		);
+		
+		// Get WooCommerce settings if available
+		if ( function_exists( 'get_woocommerce_currency' ) ) {
+			$settings['code'] = get_woocommerce_currency();
+		}
+		
+		if ( function_exists( 'get_woocommerce_currency_symbol' ) ) {
+			$settings['symbol'] = get_woocommerce_currency_symbol();
+		}
+		
+		if ( function_exists( 'get_option' ) ) {
+			$position = get_option( 'woocommerce_currency_pos', 'left' );
+			$settings['position'] = $position;
+			
+			$settings['decimals'] = absint( get_option( 'woocommerce_price_num_decimals', 2 ) );
+			$settings['decimal_separator'] = get_option( 'woocommerce_price_decimal_sep', '.' );
+			$settings['thousand_separator'] = get_option( 'woocommerce_price_thousand_sep', ',' );
+		}
+		
+		return $settings;
 	}
 }

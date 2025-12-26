@@ -19,6 +19,18 @@ interface PlacedAccessory {
 }
 
 /**
+ * Currency settings from WooCommerce
+ */
+interface CurrencySettings {
+    code: string;
+    symbol: string;
+    position: 'left' | 'right' | 'left_space' | 'right_space';
+    decimals: number;
+    decimal_separator: string;
+    thousand_separator: string;
+}
+
+/**
  * UIController orchestrates all components and manages user interactions
  */
 export class UIController {
@@ -29,6 +41,16 @@ export class UIController {
     private multiPanelManager: MultiPanelManager;
 
     private products: ProductData[] = [];
+    
+    // Currency settings
+    private currency: CurrencySettings = {
+        code: 'EUR',
+        symbol: '€',
+        position: 'right_space',
+        decimals: 2,
+        decimal_separator: ',',
+        thousand_separator: ' '
+    };
 
     // Placed accessories tracking
     private placedAccessories: Map<string, PlacedAccessory> = new Map();
@@ -73,6 +95,11 @@ export class UIController {
         // Set product data
         this.products = config.products || [];
         this.priceCalculator.setProductData(this.products);
+        
+        // Set currency settings from WooCommerce
+        if (config.currency) {
+            this.currency = { ...this.currency, ...config.currency };
+        }
 
         // Setup UI
         this.renderProductLibrary();
@@ -90,6 +117,49 @@ export class UIController {
             if (firstBoard) {
                 this.loadDefaultPanel(firstBoard.id.toString());
             }
+        }
+    }
+    
+    /**
+     * Decode HTML entities to their actual characters
+     * @param html String containing HTML entities
+     * @returns Decoded string
+     */
+    private decodeHtmlEntities(html: string): string {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = html;
+        return textarea.value;
+    }
+    
+    /**
+     * Format a price according to WooCommerce currency settings
+     * @param amount The numeric amount to format
+     * @returns Formatted price string with currency symbol
+     */
+    private formatPrice(amount: number): string {
+        // Format the number with proper decimals and separators
+        const parts = amount.toFixed(this.currency.decimals).split('.');
+        const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, this.currency.thousand_separator);
+        const decimalPart = parts[1] || '';
+        
+        const formattedNumber = decimalPart 
+            ? `${integerPart}${this.currency.decimal_separator}${decimalPart}`
+            : integerPart;
+        
+        // Decode HTML entities in the currency symbol (e.g., &#x62f;.&#x62a; -> د.ت)
+        const symbol = this.decodeHtmlEntities(this.currency.symbol);
+        
+        // Position the currency symbol
+        switch (this.currency.position) {
+            case 'left':
+                return `${symbol}${formattedNumber}`;
+            case 'left_space':
+                return `${symbol} ${formattedNumber}`;
+            case 'right':
+                return `${formattedNumber}${symbol}`;
+            case 'right_space':
+            default:
+                return `${formattedNumber} ${symbol}`;
         }
     }
 
@@ -290,7 +360,7 @@ export class UIController {
             <div class="pegboard-product-btn" data-id="${product.id}" data-type="${type}" tabindex="-1">
                 <span class="product-name">${product.name}</span>
                 ${colorDotsHtml}
-                <span class="product-price">${(product.price ?? 0).toFixed(2)} €</span>
+                <span class="product-price">${this.formatPrice(product.price ?? 0)}</span>
             </div>
         `;
     }
@@ -433,6 +503,9 @@ export class UIController {
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
         if (container) container.classList.add('placing');
+        
+        // Show placement hint
+        this.showContextHint('placement', '👆', `Cliquez sur le panneau pour placer "${product.name}"`);
     }
 
     /**
@@ -457,6 +530,9 @@ export class UIController {
         // Add placing class to container for cursor change
         const container = document.getElementById('pegboard-3d-container');
         if (container) container.classList.add('placing');
+        
+        // Show placement hint
+        this.showContextHint('placement', '👆', `Cliquez pour placer "${product.name}"`);
     }
 
 
@@ -492,6 +568,9 @@ export class UIController {
         document.querySelectorAll('.pegboard-product-btn.hover-during-placement').forEach((btn) => {
             btn.classList.remove('hover-during-placement');
         });
+        
+        // Hide context hint
+        this.hideContextHint();
     }
 
     /**
@@ -1400,6 +1479,9 @@ export class UIController {
         if (productId !== null) {
             this.highlightProductButton(productId, true);
         }
+        
+        // Show selection hint
+        this.showContextHint('selection', '✋', `Glissez pour déplacer ou appuyez sur ✕ pour supprimer`);
     }
 
     /**
@@ -1439,6 +1521,9 @@ export class UIController {
             this.selectedObject = null;
             this.selectedType = null;
             this.selectedId = null;
+            
+            // Hide context hint
+            this.hideContextHint();
         }
         // Hide delete button
         const deleteBtn = document.getElementById('pegboard-delete-selected');
@@ -1573,7 +1658,7 @@ export class UIController {
         const priceEl = document.querySelector('#pegboard-price-display .amount');
         if (priceEl) {
             const total = this.priceCalculator.getTotal();
-            priceEl.textContent = `${total.toFixed(2)} /* € */`;
+            priceEl.textContent = this.formatPrice(total);
         }
 
         // Update summary section with grouped items and colors
@@ -1662,7 +1747,7 @@ export class UIController {
                     <span class="summary-quantity">${item.quantity}×</span>
                     <span class="summary-name">${item.product.name}</span>
                     <span class="summary-colors">${colorDots}</span>
-                    <span class="summary-price">${item.subtotal.toFixed(2)} €</span>
+                    <span class="summary-price">${this.formatPrice(item.subtotal)}</span>
                 </div>
             `;
         });
@@ -1848,6 +1933,72 @@ export class UIController {
         }
 
         await this.cartIntegration.addToCart(items);
+    }
+    
+    // Context hint timeout reference
+    private contextHintTimeout: number | null = null;
+    
+    /**
+     * Show a contextual hint popup
+     * @param type - 'placement' or 'selection' for styling
+     * @param icon - Emoji/icon to display
+     * @param text - Hint message
+     * @param duration - Auto-hide duration in ms (0 = no auto-hide)
+     */
+    private showContextHint(type: 'placement' | 'selection', icon: string, text: string, duration: number = 4000): void {
+        const hintEl = document.getElementById('pegboard-context-hint');
+        if (!hintEl) return;
+        
+        // Clear any existing timeout
+        if (this.contextHintTimeout) {
+            clearTimeout(this.contextHintTimeout);
+            this.contextHintTimeout = null;
+        }
+        
+        // Update content
+        const iconEl = hintEl.querySelector('.hint-icon');
+        const textEl = hintEl.querySelector('.hint-text');
+        if (iconEl) iconEl.textContent = icon;
+        if (textEl) textEl.textContent = text;
+        
+        // Update styling
+        hintEl.classList.remove('hint-placement', 'hint-selection');
+        hintEl.classList.add(`hint-${type}`);
+        
+        // Show hint
+        hintEl.classList.remove('hidden');
+        // Force reflow for animation
+        void hintEl.offsetWidth;
+        hintEl.classList.add('visible');
+        
+        // Auto-hide after duration
+        if (duration > 0) {
+            this.contextHintTimeout = window.setTimeout(() => {
+                this.hideContextHint();
+            }, duration);
+        }
+    }
+    
+    /**
+     * Hide the contextual hint popup
+     */
+    private hideContextHint(): void {
+        const hintEl = document.getElementById('pegboard-context-hint');
+        if (!hintEl) return;
+        
+        // Clear any existing timeout
+        if (this.contextHintTimeout) {
+            clearTimeout(this.contextHintTimeout);
+            this.contextHintTimeout = null;
+        }
+        
+        hintEl.classList.remove('visible');
+        // Hide completely after animation
+        setTimeout(() => {
+            if (!hintEl.classList.contains('visible')) {
+                hintEl.classList.add('hidden');
+            }
+        }, 300);
     }
 
     /**

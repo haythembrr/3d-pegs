@@ -204,8 +204,26 @@
     transform: translateY(0);
 }
 
+.pegboard-delete-btn {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--pb-text-secondary);
+}
+
 .pegboard-delete-btn:hover {
     background: var(--pb-danger-light);
+    color: var(--pb-danger);
+}
+
+/* Help button */
+.pegboard-help-btn {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--pb-text-secondary);
+}
+
+.pegboard-help-btn:hover {
+    color: var(--pb-primary);
 }
 
 /* Theme toggle button */
@@ -264,6 +282,57 @@
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto;
+}
+
+/* ============================================
+   Contextual Hint Popup
+   ============================================ */
+.pegboard-context-hint {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: var(--pb-surface);
+    border-radius: var(--pb-radius);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--pb-text);
+    z-index: 150;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    max-width: 90%;
+    white-space: nowrap;
+}
+
+.pegboard-context-hint.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.pegboard-context-hint .hint-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.pegboard-context-hint .hint-text {
+    color: var(--pb-text);
+}
+
+/* Hint variants */
+.pegboard-context-hint.hint-placement {
+    border-left: 4px solid var(--pb-primary);
+}
+
+.pegboard-context-hint.hint-selection {
+    border-left: 4px solid var(--pb-success);
 }
 
 /* ============================================
